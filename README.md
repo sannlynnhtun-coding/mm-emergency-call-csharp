@@ -167,10 +167,9 @@ The test project covers:
 - EF-backed services using SQLite in-memory.
 - SMTP and dashboard stored-procedure paths through small fakes.
 
-Expected warnings:
+Target framework:
 
-- The solution currently targets `net7.0`, so newer SDKs report end-of-support
-  warnings until the target framework is upgraded.
+- The solution targets `.NET 10` / `net10.0`.
 
 ## Adding Or Changing A Feature
 

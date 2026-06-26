@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="7.0.20" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <ProjectReference Include="..\MMEmergencyCall.Domain.Admin\MMEmergencyCall.Domain.Admin.csproj" />
+    <ProjectReference Include="..\MMEmergencyCall.Domain.Client\MMEmergencyCall.Domain.Client.csproj" />
+    <ProjectReference Include="..\MMEmergencyCall.Database\MMEmergencyCall.Databases.csproj" />
+    <ProjectReference Include="..\MMEmergencyCall.Shared\MMEmergencyCall.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

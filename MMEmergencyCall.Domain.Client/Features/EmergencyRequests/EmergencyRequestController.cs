@@ -1,4 +1,4 @@
-﻿namespace MMEmergencyCall.Domain.Client.Features.EmergencyRequests;
+namespace MMEmergencyCall.Domain.Client.Features.EmergencyRequests;
 
 [Route("api/[controller]")]
 [UserAuthorize]
@@ -19,12 +19,12 @@ public class EmergencyRequestController : BaseController
         var currentUserId = HttpContext.GetCurrentUserId();
 
         if (!currentUserId.HasValue) { 
-            return Unauthorized("Unauthorized Request");
+            return UnauthorizedResult();
         }
 
         if (pageNo <= 0 || pageSize <= 0)
         {
-            return BadRequest("Page number and page size must be greater than zero.");
+            return BadRequestResult("Page number and page size must be greater than zero.");
         }
 
         var model = await _emergencyRequestService.GetEmergencyRequests(pageNo, pageSize, currentUserId, serviceId,providerId,status,townshipCode);
@@ -38,7 +38,7 @@ public class EmergencyRequestController : BaseController
 
         if (!currentUserId.HasValue)
         {
-            return Unauthorized("Unauthorized Request");
+            return UnauthorizedResult();
         }
 
         var model = await _emergencyRequestService.GetEmergencyRequestById(id,currentUserId.Value);
@@ -52,7 +52,7 @@ public class EmergencyRequestController : BaseController
 
         if (!currentUserId.HasValue)
         {
-            return Unauthorized("Unauthorized Request");
+            return UnauthorizedResult();
         }
 
         var model = await _emergencyRequestService.AddEmergencyRequest(request,currentUserId.Value);
@@ -66,7 +66,7 @@ public class EmergencyRequestController : BaseController
 
     //    if (!currentUserId.HasValue)
     //    {
-    //        return Unauthorized("Unauthorized Request");
+    //        return UnauthorizedResult();
     //    }
 
     //    var model = await _emergencyRequestService.UpdateEmergencyRequestStatus(id, currentUserId.Value,statusRequest);

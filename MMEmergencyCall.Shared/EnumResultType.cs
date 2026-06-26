@@ -4,7 +4,12 @@ public enum EnumResultType
 {
     None,
     Success,
-    Failure,
+    Error,
     ValidationError,
-    NotFoundError
+    SystemError,
+    NotFound,
+    DuplicateRecord,
+    InvalidData,
+    BadRequest,
+    Unauthorized
 }

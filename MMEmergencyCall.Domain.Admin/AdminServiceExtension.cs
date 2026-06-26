@@ -58,6 +58,7 @@ public static class AdminServiceExtension
 		builder.Services.AddScoped<TownshipService>();
 
 		// Dashboard Features
+		builder.Services.AddScoped<IDashboardReader, DapperDashboardReader>();
 		builder.Services.AddScoped<DashboardService>();
 		builder.Services.AddScoped<UserTopTenRequestService>();
 		builder.Services.AddScoped<TownshipTopTenRequestService>();

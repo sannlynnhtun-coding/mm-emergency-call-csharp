@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using MMEmergencyCall.Domain.Client.Features.EmergencyServices;
 
 namespace MMEmergencyCall.Domain.Client.Features.EmergencyRequests;
@@ -20,6 +20,11 @@ public class EmergencyRequestService
     {
         try
         {
+            if (pageNo < 1 || pageSize < 1)
+            {
+                return Result<EmergencyRequestPaginationResponseModel>.ValidationError("Invalid PageNo.");
+            }
+
             var query = _db.EmergencyRequests.AsQueryable();
 
             if (userId.HasValue)
@@ -40,7 +45,7 @@ public class EmergencyRequestService
                 if (!Enum.IsDefined(typeof(EnumEmergencyRequestStatus), status))
                 {
                     return Result<EmergencyRequestPaginationResponseModel>.ValidationError(
-                        "Invalid Emergency Request Status. Status should be Cancel, Open or Closed"
+                        "Invalid Emergency Request Status. Status should be Open, Cancel, Closed or Completed"
                     );
                 }
 
@@ -59,6 +64,11 @@ public class EmergencyRequestService
             int totalRecords = await query.CountAsync();
 
             int pageCount = (int)Math.Ceiling(totalRecords / (double)pageSize);
+
+            if (pageNo > pageCount && pageCount > 0)
+            {
+                return Result<EmergencyRequestPaginationResponseModel>.ValidationError("Invalid PageNo.");
+            }
 
             var emergencyRequests = await query
                 .Skip((pageNo - 1) * pageSize)
@@ -92,7 +102,7 @@ public class EmergencyRequestService
         {
             string message = "An error occurred while getting the emergency requests: " + ex.Message;
             _logger.LogError(message);
-            return Result<EmergencyRequestPaginationResponseModel>.Failure(message);
+            return Result<EmergencyRequestPaginationResponseModel>.SystemError("Internal server error");
         }
     }
 
@@ -128,7 +138,7 @@ public class EmergencyRequestService
         {
             string message = "An error occurred while getting the emergency request with id " + id + " : " + ex.Message;
             _logger.LogError(message);
-            return Result<EmergencyRequestResponseModel>.Failure(message);
+            return Result<EmergencyRequestResponseModel>.SystemError("Internal server error");
         }
     }
 
@@ -136,17 +146,28 @@ public class EmergencyRequestService
     {
         try
         {
-            var validateRequestModelResponse = await ValidateEmergencyRequestRequestModel(request);
+            if (request is null)
+            {
+                return Result<EmergencyRequestResponseModel>
+                    .ValidationError("Request model cannot be null.");
+            }
+
+            var user = await _db.Users.FirstOrDefaultAsync(x => x.UserId == currentUserId);
+            if (user is null)
+            {
+                return Result<EmergencyRequestResponseModel>
+                    .ValidationError("Invalid User");
+            }
+
+            var townshipCode = string.IsNullOrEmpty(request.TownshipCode)
+                ? user.TownshipCode
+                : request.TownshipCode;
+
+            var validateRequestModelResponse = await ValidateEmergencyRequestRequestModel(request, townshipCode);
 
             if (validateRequestModelResponse is not null)
             {
                 return validateRequestModelResponse;
-            }
-
-            if (!await IsUserIdExist(currentUserId))
-            {
-                return Result<EmergencyRequestResponseModel>
-                    .ValidationError("Invalid User");
             }
 
             var emergencyRequest = new EmergencyRequest()
@@ -154,11 +175,11 @@ public class EmergencyRequestService
                 UserId = currentUserId,
                 ServiceId = request.ServiceId,
                 ProviderId = request.ProviderId,
-                RequestTime = request.RequestTime,
+                RequestTime = DateTime.Now,
                 Status = nameof(EnumEmergencyRequestStatus.Open),
-                ResponseTime = request.ResponseTime,
+                ResponseTime = null,
                 Notes = request.Notes,
-                TownshipCode = request.TownshipCode
+                TownshipCode = townshipCode
             };
 
             _db.EmergencyRequests.Add(emergencyRequest);
@@ -183,7 +204,7 @@ public class EmergencyRequestService
         {
             string message = "An error occurred while adding the emergency request : " + ex.Message;
             _logger.LogError(message);
-            return Result<EmergencyRequestResponseModel>.Failure(message);
+            return Result<EmergencyRequestResponseModel>.SystemError("Internal server error");
         }
     }
 
@@ -194,7 +215,7 @@ public class EmergencyRequestService
             if (!Enum.IsDefined(typeof(EnumEmergencyRequestStatus), statusRequest.Status))
             {
                 return Result<EmergencyRequestResponseModel>.ValidationError(
-                    "Invalid Emergency Request Status. Status should be Cancel, Open or Closed"
+                    "Invalid Emergency Request Status. Status should be Open, Cancel, Closed or Completed"
                 );
             }
 
@@ -237,13 +258,13 @@ public class EmergencyRequestService
             string message = "An error occurred while updating the status of emergency request with id " + id + " : " +
                              ex.Message;
             _logger.LogError(message);
-            return Result<EmergencyRequestResponseModel>.Failure(message);
+            return Result<EmergencyRequestResponseModel>.SystemError("Internal server error");
         }
     }
 
     #region privateMethods
     private async Task<Result<EmergencyRequestResponseModel>> ValidateEmergencyRequestRequestModel
-        (EmergencyRequestRequestModel? request)
+        (EmergencyRequestRequestModel? request, string? townshipCode)
     {
         if (request is null)
         {
@@ -251,19 +272,19 @@ public class EmergencyRequestService
                 .ValidationError("Request model cannot be null.");
         }
 
-        if (request.ProviderId < 1)
+        if (request.ProviderId.HasValue && request.ProviderId < 1)
         {
             return Result<EmergencyRequestResponseModel>
                 .ValidationError("Invalid Provider Id.");
         }
 
-        if (!await IsServiceIdExist(request.ServiceId))
+        if (!await IsApprovedServiceIdExist(request.ServiceId))
         {
             return Result<EmergencyRequestResponseModel>
-                .ValidationError("Invalid Service Id.");
+                .ValidationError("Invalid or unapproved Service Id.");
         }
 
-        if (!await IsTownshipCodeExist(request.TownshipCode))
+        if (!string.IsNullOrEmpty(townshipCode) && !await IsTownshipCodeExist(townshipCode))
         {
             return Result<EmergencyRequestResponseModel>
                 .ValidationError("Invalid Township Code.");
@@ -283,9 +304,11 @@ public class EmergencyRequestService
     //    var isProviderIdExist = await _db.
     //}
 
-    private async Task<bool> IsServiceIdExist(int serviceId)
+    private async Task<bool> IsApprovedServiceIdExist(int serviceId)
     {
-        var isServiceIdExist = await _db.EmergencyServices.AnyAsync(x => x.ServiceId == serviceId);
+        var isServiceIdExist = await _db.EmergencyServices.AnyAsync(x =>
+            x.ServiceId == serviceId &&
+            x.ServiceStatus == MMEmergencyCall.Shared.EnumServiceStatus.Approved.ToString());
         return isServiceIdExist;
     }
 

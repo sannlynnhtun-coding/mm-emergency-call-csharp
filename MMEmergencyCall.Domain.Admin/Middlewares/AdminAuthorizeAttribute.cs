@@ -9,13 +9,13 @@ public class AdminAuthorizeAttribute : Attribute, IAsyncAuthorizationFilter
 
         if (dbContext == null)
         {
-            context.Result = new UnauthorizedObjectResult("Something went wrong.");
+            context.Result = new UnauthorizedObjectResult(Result<object?>.UnauthorizedError("Something went wrong."));
             return;
         }
 
         if (!context.HttpContext!.Request.Headers["Token"].Any())
         {
-            context.Result = new UnauthorizedObjectResult(string.Empty);
+            context.Result = new UnauthorizedObjectResult(Result<object?>.UnauthorizedError("Token is missing."));
             return;
         }
 
@@ -26,13 +26,13 @@ public class AdminAuthorizeAttribute : Attribute, IAsyncAuthorizationFilter
 
             if (!await IsExistAdmin(dbContext, item.UserId))
             {
-                context.Result = new UnauthorizedObjectResult("Admin does not exist.");
+                context.Result = new UnauthorizedObjectResult(Result<object?>.UnauthorizedError("Admin does not exist."));
                 return;
             }
 
             if (item.SessionExpiredTime <= DateTime.Now)
             {
-                context.Result = new UnauthorizedObjectResult("Session has expired.");
+                context.Result = new UnauthorizedObjectResult(Result<object?>.UnauthorizedError("Session has expired."));
                 return;
             }
 
@@ -40,13 +40,17 @@ public class AdminAuthorizeAttribute : Attribute, IAsyncAuthorizationFilter
         }
         catch (Exception)
         {
-            context.Result = new UnauthorizedObjectResult("Invalid token.");
+            context.Result = new UnauthorizedObjectResult(Result<object?>.UnauthorizedError("Invalid token."));
             return;
         }
     }
 
     private static async Task<bool> IsExistAdmin(AppDbContext dbContext, int userId)
     {
-        return await dbContext.Users.AnyAsync(u => u.UserId == userId);
+        return await dbContext.Users.AnyAsync(u =>
+            u.UserId == userId &&
+            u.Role.ToLower() == "admin" &&
+            u.IsVerified == EnumVerify.Y.ToString() &&
+            u.UserStatus != EnumUserStatus.Deleted.ToString());
     }
 }

@@ -1,6 +1,7 @@
 ﻿namespace MMEmergencyCall.Domain.Admin.Features.Dashboard;
 
 [Route("api/Admin/Dashboard")]
+[AdminAuthorize]
 [ApiController]
 public class DashboardController : BaseController
 {

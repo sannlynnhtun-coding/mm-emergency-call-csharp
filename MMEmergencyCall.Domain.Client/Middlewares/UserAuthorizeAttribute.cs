@@ -9,13 +9,13 @@ public class UserAuthorizeAttribute : Attribute, IAsyncAuthorizationFilter
 
         if (dbContext == null)
         {
-            context.Result = new UnauthorizedObjectResult("Something went wrong.");
+            context.Result = new UnauthorizedObjectResult(Result<object?>.UnauthorizedError("Something went wrong."));
             return;
         }
 
         if (!context.HttpContext.Request.Headers["Token"].Any())
         {
-            context.Result = new UnauthorizedObjectResult("Token is missing.");
+            context.Result = new UnauthorizedObjectResult(Result<object?>.UnauthorizedError("Token is missing."));
             return;
         }
 
@@ -26,13 +26,13 @@ public class UserAuthorizeAttribute : Attribute, IAsyncAuthorizationFilter
 
             if (!await IsUserExist(dbContext, item.UserId))
             {
-                context.Result = new UnauthorizedObjectResult("User does not exist.");
+                context.Result = new UnauthorizedObjectResult(Result<object?>.UnauthorizedError("User does not exist."));
                 return;
             }
 
             if (item.SessionExpiredTime <= DateTime.Now)
             {
-                context.Result = new UnauthorizedObjectResult("Session has expired.");
+                context.Result = new UnauthorizedObjectResult(Result<object?>.UnauthorizedError("Session has expired."));
                 return;
             }
 
@@ -40,7 +40,7 @@ public class UserAuthorizeAttribute : Attribute, IAsyncAuthorizationFilter
         }
         catch (Exception)
         {
-            context.Result = new UnauthorizedObjectResult("Invalid token.");
+            context.Result = new UnauthorizedObjectResult(Result<object?>.UnauthorizedError("Invalid token."));
         }
     }
 

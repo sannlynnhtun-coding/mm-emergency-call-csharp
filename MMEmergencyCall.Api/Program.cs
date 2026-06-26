@@ -1,12 +1,26 @@
+using Microsoft.AspNetCore.Mvc;
 using MMEmergencyCall.Databases.Dapper;
 using MMEmergencyCall.Domain.Admin;
 using MMEmergencyCall.Domain.Client.Features.Profile;
+using MMEmergencyCall.Shared;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+	.ConfigureApiBehaviorOptions(options =>
+	{
+		options.InvalidModelStateResponseFactory = context =>
+		{
+			var message = string.Join("; ", context.ModelState.Values
+				.SelectMany(x => x.Errors)
+				.Select(x => string.IsNullOrWhiteSpace(x.ErrorMessage) ? "Invalid request." : x.ErrorMessage));
+
+			return new BadRequestObjectResult(
+				Result<object?>.ValidationError(string.IsNullOrWhiteSpace(message) ? "Invalid request." : message));
+		};
+	});
 
 builder.Services.AddHttpContextAccessor();
 
@@ -44,6 +58,16 @@ var app = builder.Build();
 
 app.UseSwagger();
 app.UseSwaggerUI();
+
+app.UseExceptionHandler(errorApp =>
+{
+	errorApp.Run(async context =>
+	{
+		context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+		context.Response.ContentType = "application/json";
+		await context.Response.WriteAsJsonAsync(Result<object?>.SystemError("Internal server error"));
+	});
+});
 
 app.UseHttpsRedirection();
 

@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 
 namespace MMEmergencyCall.Domain.Client.Features.Profile;
 
@@ -47,7 +47,7 @@ public class ProfileService
         {
             string message = "An error occurred while getting the user with id " + userId + " : " + ex.Message;
             _logger.LogError(message);
-            return Result<ProfileResponseModel>.Failure(message);
+            return Result<ProfileResponseModel>.SystemError("Internal server error");
         }
     }
 
@@ -75,7 +75,7 @@ public class ProfileService
         {
             string message = "An error occurred while deactivating the user with id " + userId + " : " + ex.Message;
             _logger.LogError(message);
-            return Result<bool>.Failure(message);
+            return Result<bool>.SystemError("Internal server error");
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿namespace MMEmergencyCall.Domain.Admin.Features.StateRegions;
+namespace MMEmergencyCall.Domain.Admin.Features.StateRegions;
 
 public class StateRegionService
 {
@@ -39,7 +39,7 @@ public class StateRegionService
         {
             string message = "An error occurred while creating the state region requests: " + ex.Message;
             _logger.LogError(message);
-            return Result<StateRegionResponseModel>.Failure(message);
+            return Result<StateRegionResponseModel>.SystemError("Internal server error");
         }
     }
 
@@ -50,7 +50,7 @@ public class StateRegionService
             var stateRegion = await _context.Set<StateRegion>().FindAsync(id);
             if (stateRegion == null)
             {
-                return Result<StateRegionResponseModel>.Failure("State region not found.");
+                return Result<StateRegionResponseModel>.NotFoundError("State region not found.");
             }
 
             var model = new StateRegionResponseModel
@@ -67,7 +67,7 @@ public class StateRegionService
         {
             string message = "An error occurred while getting the state region requests for id " + id + " : " + ex.Message;
             _logger.LogError(message);
-            return Result<StateRegionResponseModel>.Failure(message);
+            return Result<StateRegionResponseModel>.SystemError("Internal server error");
         }
     }
 
@@ -78,7 +78,7 @@ public class StateRegionService
             var stateRegion = await _context.Set<StateRegion>().FindAsync(id);
             if (stateRegion == null)
             {
-                return Result<StateRegionResponseModel>.Failure("State region with id " + id + " not found.");
+                return Result<StateRegionResponseModel>.NotFoundError("State region with id " + id + " not found.");
             }
 
             stateRegion.StateRegionCode = requestModel.StateRegionCode;
@@ -101,7 +101,7 @@ public class StateRegionService
         {
             string message = "An error occurred while updating the state region requests for id " + id + " : " + ex.Message;
             _logger.LogError(message);
-            return Result<StateRegionResponseModel>.Failure(message);
+            return Result<StateRegionResponseModel>.SystemError("Internal server error");
         }
     }
 
@@ -109,7 +109,7 @@ public class StateRegionService
     {
         var stateRegion = await _context.Set<StateRegion>().FindAsync(id);
         if (stateRegion == null)
-            return Result<bool>.Failure("State region not found.");
+            return Result<bool>.NotFoundError("State region not found.");
 
         _context.Remove(stateRegion);
         await _context.SaveChangesAsync();

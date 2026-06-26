@@ -1,4 +1,4 @@
-﻿namespace MMEmergencyCall.Domain.Client.Features.Profile;
+namespace MMEmergencyCall.Domain.Client.Features.Profile;
 
 [Route("api/[controller]")]
 [UserAuthorize]
@@ -19,7 +19,7 @@ public class ProfileController : BaseController
 
         if (!currentUserId.HasValue)
         {
-            return Unauthorized("Unauthorized Request");
+            return UnauthorizedResult();
         }
 
         var model = await _profileService.GetProfileById(currentUserId.Value);
@@ -33,7 +33,7 @@ public class ProfileController : BaseController
 
         if (!currentUserId.HasValue)
         {
-            return Unauthorized("Unauthorized Request");
+            return UnauthorizedResult();
         }
 
         var model = await _profileService.DeactivateProfile(currentUserId.Value);

@@ -1,4 +1,4 @@
-﻿namespace MMEmergencyCall.Domain.Admin.Features.Townships;
+namespace MMEmergencyCall.Domain.Admin.Features.Townships;
 
 public class TownshipService
 {
@@ -13,18 +13,17 @@ public class TownshipService
 
     public async Task<Result<TownshipPaginationResponseModel>> GetAllAsync(int pageNo = 1, int pageSize = 10)
     {
-        var rowCount = _context.Townships.Count();
-
-        int pageCount = rowCount / pageSize;
-
-        if (pageNo < 1)
+        if (pageNo < 1 || pageSize < 1)
         {
-            return Result<TownshipPaginationResponseModel>.Failure("Invalid PageNo.");
+            return Result<TownshipPaginationResponseModel>.BadRequestError("Invalid PageNo.");
         }
 
-        if (pageNo > pageCount)
+        var rowCount = await _context.Townships.CountAsync();
+        int pageCount = (int)Math.Ceiling(rowCount / (double)pageSize);
+
+        if (pageNo > pageCount && pageCount > 0)
         {
-            return Result<TownshipPaginationResponseModel>.Failure("Invalid PageNo.");
+            return Result<TownshipPaginationResponseModel>.BadRequestError("Invalid PageNo.");
         }
 
         var townships = await _context
@@ -73,7 +72,7 @@ public class TownshipService
         {
             string message = "An error occurred while getting the township requests for id " + id + " : " + ex.Message;
             _logger.LogError(message);
-            return Result<TownshipResponseModel>.Failure(message);
+            return Result<TownshipResponseModel>.SystemError("Internal server error");
         }
     }
 
@@ -107,7 +106,7 @@ public class TownshipService
         {
             string message = "An error occurred while creating the township requests: " + ex.Message;
             _logger.LogError(message);
-            return Result<TownshipResponseModel>.Failure(message);
+            return Result<TownshipResponseModel>.SystemError("Internal server error");
         }
     }
 
@@ -142,7 +141,7 @@ public class TownshipService
         {
             string message = "An error occurred while updating the township requests for id " + id + " : " + ex.Message;
             _logger.LogError(message);
-            return Result<TownshipResponseModel>.Failure(message);
+            return Result<TownshipResponseModel>.SystemError("Internal server error");
         }
     }
 

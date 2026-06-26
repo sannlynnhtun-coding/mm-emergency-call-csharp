@@ -1,4 +1,4 @@
-﻿namespace MMEmergencyCall.Domain.Client.Features.EmergencyServices;
+namespace MMEmergencyCall.Domain.Client.Features.EmergencyServices;
 
 [UserAuthorize]
 [Route("api/[controller]")]
@@ -19,7 +19,7 @@ public class EmergencyServicesController : BaseController
 
         if (!currentUserId.HasValue)
         {
-            return Unauthorized("Unauthorized Request");
+            return UnauthorizedResult();
         }
 
         var model = await _emergencyServiceService
@@ -34,7 +34,7 @@ public class EmergencyServicesController : BaseController
 
         if (!currentUserId.HasValue)
         {
-            return Unauthorized("Unauthorized Request");
+            return UnauthorizedResult();
         }
         var response = await _emergencyServiceService.GetEmergencyServiceById(serviceId);
         return Execute(response);
@@ -47,7 +47,7 @@ public class EmergencyServicesController : BaseController
 
         if (!currentUserId.HasValue)
         {
-            return Unauthorized("Unauthorized Request");
+            return UnauthorizedResult();
         }
         var response = await _emergencyServiceService.GetEmergencyServiceWithinDistanceAsync(townshipCode, emergencyType, lat, lng, maxDistanceInKm, pageNo, pageSize);
         return Execute(response);
@@ -63,9 +63,9 @@ public class EmergencyServicesController : BaseController
 
         if (!currentUserId.HasValue)
         {
-            return Unauthorized("Unauthorized Request");
+            return UnauthorizedResult();
         }
-        var model = await _emergencyServiceService.CreateEmergencyServiceAsync(requestModel);
+        var model = await _emergencyServiceService.CreateEmergencyServiceAsync(requestModel, currentUserId.Value);
         return Execute(model);
     }
 
@@ -77,7 +77,7 @@ public class EmergencyServicesController : BaseController
         var currentUserId = HttpContext.GetCurrentUserId();
         if (!currentUserId.HasValue)
         {
-            return Unauthorized("Unauthorized Request");
+            return UnauthorizedResult();
         }
 
         Result<EmergencyServiceResponseModel> model = null;
@@ -114,12 +114,12 @@ public class EmergencyServicesController : BaseController
             goto BadRequest;
         }
 
-        model = await _emergencyServiceService.UpdateEmergencyService(id, requestModel);
+        model = await _emergencyServiceService.UpdateEmergencyService(id, currentUserId.Value, requestModel);
 
         return Execute(model);
 
         BadRequest:
-        return BadRequest(model);
+        return Execute(model);
     }
 
     [HttpDelete("{id}")]
@@ -130,10 +130,10 @@ public class EmergencyServicesController : BaseController
 
         if (!currentUserId.HasValue)
         {
-            return Unauthorized("Unauthorized Request");
+            return UnauthorizedResult();
         }
 
-        var model = await _emergencyServiceService.DeleteEmergencyService(id);
+        var model = await _emergencyServiceService.DeleteEmergencyService(id, currentUserId.Value);
         return Execute(model);
     }
 

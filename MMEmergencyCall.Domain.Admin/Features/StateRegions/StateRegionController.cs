@@ -32,26 +32,26 @@ public class StateRegionController : BaseController
         Result<StateRegionResponseModel> model = null;
         if (string.IsNullOrEmpty(requestModel.StateRegionCode))
         {
-            model = Result<StateRegionResponseModel>.Failure("StateRegionCode is required.");
+            model = Result<StateRegionResponseModel>.ValidationError("StateRegionCode is required.");
             goto badRequest;
         }
         if (string.IsNullOrEmpty(requestModel.StateRegionNameEn))
         {
-            model = Result<StateRegionResponseModel>.Failure("StateRegionNameEn is required.");
+            model = Result<StateRegionResponseModel>.ValidationError("StateRegionNameEn is required.");
             goto badRequest;
         }
         if (string.IsNullOrEmpty(requestModel.StateRegionNameMm))
         {
-            model = Result<StateRegionResponseModel>.Failure("StateRegionNameMm is required.");
+            model = Result<StateRegionResponseModel>.ValidationError("StateRegionNameMm is required.");
             goto badRequest;
         }
 
         model = await _stateRegionService.CreateAsync(requestModel);
         if (model.IsSuccess)
-            return Ok(model);
+            return Execute(model);
 
         badRequest:
-        return BadRequest(model);
+        return Execute(model);
     }
 
     [HttpPut("{id}")]
@@ -60,28 +60,28 @@ public class StateRegionController : BaseController
         Result<StateRegionResponseModel> model = null;
         if (string.IsNullOrEmpty(requestModel.StateRegionCode))
         {
-            model = Result<StateRegionResponseModel>.Failure("StateRegionCode is required.");
+            model = Result<StateRegionResponseModel>.ValidationError("StateRegionCode is required.");
             goto badRequest;
         }
         if (string.IsNullOrEmpty(requestModel.StateRegionNameEn))
         {
-            model = Result<StateRegionResponseModel>.Failure("StateRegionNameEn is required.");
+            model = Result<StateRegionResponseModel>.ValidationError("StateRegionNameEn is required.");
             goto badRequest;
         }
         if (string.IsNullOrEmpty(requestModel.StateRegionNameMm))
         {
-            model = Result<StateRegionResponseModel>.Failure("StateRegionNameMm is required.");
+            model = Result<StateRegionResponseModel>.ValidationError("StateRegionNameMm is required.");
             goto badRequest;
         }
 
         model = await _stateRegionService.UpdateAsync(id, requestModel);
         if (!model.IsSuccess)
-            return NotFound(model);
+            return Execute(model);
 
-        return Ok(model);
+        return Execute(model);
 
     badRequest:
-        return BadRequest(model);
+        return Execute(model);
     }
 
     [HttpDelete("{id}")]

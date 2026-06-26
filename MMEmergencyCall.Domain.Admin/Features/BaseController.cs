@@ -1,4 +1,4 @@
-﻿namespace MMEmergencyCall.Domain.Admin.Features;
+namespace MMEmergencyCall.Domain.Admin.Features;
 
 public class BaseController : ControllerBase
 {
@@ -9,15 +9,34 @@ public class BaseController : ControllerBase
 
     public IActionResult Execute<T>(Result<T> model)
     {
-        if (model.IsValidationError)
+        if (model is null)
+            return InternalServerError(Result<T>.SystemError("Internal server error"));
+
+        if (model.IsValidationError() || model.IsBadRequest() || model.IsInvalidData() || model.IsDataError())
             return BadRequest(model);
 
-        if (model.IsNotFoundError)
+        if (model.IsUnauthorized())
+            return Unauthorized(model);
+
+        if (model.IsNotFound())
             return NotFound(model);
 
-        if (model.IsError)
+        if (model.IsDuplicateRecord())
+            return Conflict(model);
+
+        if (model.IsSystemError())
             return InternalServerError(model);
 
         return Ok(model);
+    }
+
+    protected IActionResult BadRequestResult(string message)
+    {
+        return Execute(Result<object?>.BadRequestError(message));
+    }
+
+    protected IActionResult UnauthorizedResult(string message = "Unauthorized Request")
+    {
+        return Execute(Result<object?>.UnauthorizedError(message));
     }
 }

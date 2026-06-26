@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Geolocation;
 
 namespace MMEmergencyCall.Domain.Client.Features.EmergencyServices;
@@ -18,12 +18,13 @@ public class EmergencyServiceService
     public async Task<Result<EmergencyServicePaginationResponseModel>>
         GetEmergencyServices(int pageNo, int pageSize, string? serviceType)
     {
-        if (pageNo < 1)
+        if (pageNo < 1 || pageSize < 1)
         {
             return Result<EmergencyServicePaginationResponseModel>.ValidationError("Invalid PageNo.");
         }
 
-        var query = _db.EmergencyServices.AsQueryable();
+        var query = _db.EmergencyServices
+            .Where(x => x.ServiceStatus == EnumServiceStatus.Approved.ToString());
 
         if (!string.IsNullOrEmpty(serviceType))
         {
@@ -34,12 +35,10 @@ public class EmergencyServiceService
 
         int pageCount = (int)Math.Ceiling(totalRecords / (double)pageSize);
 
-        if (pageNo > pageCount)
+        if (pageNo > pageCount && pageCount > 0)
         {
             return Result<EmergencyServicePaginationResponseModel>.ValidationError("Invalid PageNo.");
         }
-
-        query = query.Where(x => x.ServiceStatus == EnumServiceStatus.Approved.ToString());
 
         var emergencyService = await query
                 .Skip((pageNo - 1) * pageSize)
@@ -104,16 +103,19 @@ public class EmergencyServiceService
             string message = "An error occurred while getting emergency service by ID for id "
                 + serviceId + " : " + ex.ToString();
             _logger.LogError(message);
-            return Result<EmergencyServiceResponseModel>.Failure(message);
+            return Result<EmergencyServiceResponseModel>.SystemError("Internal server error");
         }
     }
 
-    public async Task<Result<EmergencyServiceResponseModel>> CreateEmergencyServiceAsync(EmergencyServiceRequestModel request)
+    public async Task<Result<EmergencyServiceResponseModel>> CreateEmergencyServiceAsync(
+        EmergencyServiceRequestModel request,
+        int currentUserId)
     {
         try
         {
             var emergencyService = new EmergencyService
             {
+                UserId = currentUserId,
                 ServiceType = request.ServiceType,
                 ServiceGroup = request.ServiceGroup,
                 ServiceName = request.ServiceName,
@@ -121,6 +123,7 @@ public class EmergencyServiceService
                 Location = request.Location,
                 Availability = request.Availability,
                 TownshipCode = request.TownshipCode,
+                ServiceStatus = nameof(EnumServiceStatus.Pending)
             };
 
             _db.EmergencyServices.Add(emergencyService);
@@ -146,12 +149,13 @@ public class EmergencyServiceService
         {
             string message = "An error occurred while creating emergency service: " + ex.ToString();
             _logger.LogError(message);
-            return Result<EmergencyServiceResponseModel>.Failure(message);
+            return Result<EmergencyServiceResponseModel>.SystemError("Internal server error");
         }
     }
 
     public async Task<Result<EmergencyServiceResponseModel>> UpdateEmergencyService(
         int id,
+        int currentUserId,
         EmergencyServiceRequestModel requestModel
     )
     {
@@ -163,6 +167,12 @@ public class EmergencyServiceService
             {
                 return Result<EmergencyServiceResponseModel>
                     .NotFoundError("Emergency Service with id " + id + " not found.");
+            }
+
+            if (emergencyService.UserId != currentUserId)
+            {
+                return Result<EmergencyServiceResponseModel>
+                    .ValidationError("You can edit only your own service.");
             }
 
             var status = emergencyService.ServiceStatus;
@@ -179,7 +189,7 @@ public class EmergencyServiceService
             emergencyService.Location = requestModel.Location;
             emergencyService.Availability = requestModel.Availability;
             emergencyService.TownshipCode = requestModel.TownshipCode;
-            emergencyService.ServiceStatus = requestModel.ServiceStatus;
+            emergencyService.ServiceStatus = nameof(EnumServiceStatus.Pending);
 
             _db.Entry(emergencyService).State = EntityState.Modified;
             await _db.SaveChangesAsync();
@@ -208,11 +218,11 @@ public class EmergencyServiceService
                 + ": "
                 + ex.Message;
             _logger.LogError(message);
-            return Result<EmergencyServiceResponseModel>.Failure(message);
+            return Result<EmergencyServiceResponseModel>.SystemError("Internal server error");
         }
     }
 
-    public async Task<Result<bool>> DeleteEmergencyService(int id)
+    public async Task<Result<bool>> DeleteEmergencyService(int id, int currentUserId)
     {
         try
         {
@@ -223,13 +233,19 @@ public class EmergencyServiceService
                 return Result<bool>.NotFoundError("Emergency Service not found.");
             }
 
+            if (emergencyService.UserId != currentUserId)
+            {
+                return Result<bool>.ValidationError("You can delete only your own service.");
+            }
+
             var status = emergencyService.ServiceStatus;
             if (status != "Pending")
             {
-                return Result<bool>.Failure("You can delete only Services with Pending status.");
+                return Result<bool>.InvalidDataError("You can delete only Services with Pending status.");
             }
 
-            _db.Remove(emergencyService);
+            emergencyService.ServiceStatus = MMEmergencyCall.Shared.EnumServiceStatus.Deleted.ToString();
+            _db.Entry(emergencyService).State = EntityState.Modified;
             await _db.SaveChangesAsync();
 
             return Result<bool>.Success(true, "Emergency Service deleted successfully.");
@@ -242,7 +258,7 @@ public class EmergencyServiceService
                 + ": "
                 + ex.Message;
             _logger.LogError(message);
-            return Result<bool>.Failure(message);
+            return Result<bool>.SystemError("Internal server error");
         }
     }
 
@@ -289,21 +305,24 @@ public class EmergencyServiceService
     public async Task<Result<EmergencyServicesListWithDistance>> GetEmergencyServiceWithinDistanceAsync(string? townshipCode, string? emergencyType, decimal lat, decimal lng, decimal maxDistanceInKm, int pageNo, int pageSize)
     {
 
-        var query = _db.EmergencyServices.AsQueryable();
+        if (pageNo < 1 || pageSize < 1)
+        {
+            return Result<EmergencyServicesListWithDistance>.ValidationError("Invalid PageNo.");
+        }
+
+        var query = _db.EmergencyServices
+            .Where(x => x.ServiceStatus == EnumServiceStatus.Approved.ToString());
 
         if (!string.IsNullOrEmpty(townshipCode))
         {
-            query = query.Where(x => x.TownshipCode.ToUpper() == townshipCode.ToUpper() && x.ServiceStatus == EnumServiceStatus.Approved.ToString());
+            query = query.Where(x => x.TownshipCode != null && x.TownshipCode.ToUpper() == townshipCode.ToUpper());
         }
         if (!string.IsNullOrEmpty(emergencyType))
         {
             query = query.Where(x => x.ServiceType.ToUpper() == emergencyType.ToUpper());
         }
 
-        var emergencyService = await query.Where(x => x.ServiceStatus == EnumServiceStatus.Approved.ToString())
-                .Skip((pageNo - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
+        var emergencyService = await query.ToListAsync();
 
         List<EmergencyServicesWithDistance> emergencyServicesWithinDistance = new List<EmergencyServicesWithDistance>();
         if (!string.IsNullOrEmpty(lat.ToString()) && !string.IsNullOrEmpty(lng.ToString())
@@ -329,7 +348,8 @@ public class EmergencyServiceService
                    Distance = CalculateDistanceByUsingLibrary(lat, lng, emergencyServices.Ltd, emergencyServices.Lng)
                })
                .Where(location => location.Distance <= maxDistanceInKm)
-               .OrderBy(location => location.Distance).ToList();
+               .OrderBy(location => location.Distance)
+               .ToList();
         }
         else
         {
@@ -353,13 +373,22 @@ public class EmergencyServiceService
        .ToList();
         }
 
-        EmergencyServicesListWithDistance model = new();
-        model.Data = emergencyServicesWithinDistance;
-        if (emergencyServicesWithinDistance is null || emergencyServicesWithinDistance.Count <= 0)
+        int totalRecords = emergencyServicesWithinDistance.Count;
+        int pageCount = (int)Math.Ceiling(totalRecords / (double)pageSize);
+
+        if (pageNo > pageCount && pageCount > 0)
         {
-            return Result<EmergencyServicesListWithDistance>
-                    .NotFoundError("We don't have emergencyservice in this location.");
+            return Result<EmergencyServicesListWithDistance>.ValidationError("Invalid PageNo.");
         }
+
+        EmergencyServicesListWithDistance model = new();
+        model.PageNo = pageNo;
+        model.PageSize = pageSize;
+        model.PageCount = pageCount;
+        model.Data = emergencyServicesWithinDistance
+            .Skip((pageNo - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
 
         return Result<EmergencyServicesListWithDistance>.Success(model);
 

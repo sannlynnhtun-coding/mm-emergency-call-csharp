@@ -133,6 +133,7 @@
                                                             }
                                                             @if (CanUpdateUsers && row.User is not null)
                                                             {
+                                                                <Button Variant="outline" OnClick="@(() => StartUserEdit(row))" Disabled="@(_actionId.HasValue || _isSaving)">Edit</Button>
                                                                 @if (!IsActivated(row.Status))
                                                                 {
                                                                     <Button OnClick='@(() => UpdateUserStatusAsync(row, "Activated"))' Disabled="@_actionId.HasValue">Activate</Button>
@@ -200,12 +201,15 @@
                     }
                     @if (CanCreateUsers)
                     {
-                        <form class="rounded-md border border-neutral-200 bg-neutral-50 p-4" @onsubmit="CreateUserAsync" @onsubmit:preventDefault="true">
-                            <p class="text-sm font-medium text-neutral-950">Create user</p>
+                        <form class="rounded-md border border-neutral-200 bg-neutral-50 p-4" @onsubmit="SaveUserAsync" @onsubmit:preventDefault="true">
+                            <p class="text-sm font-medium text-neutral-950">@(_userEditId.HasValue ? "Edit user" : "Create user")</p>
                             <div class="mt-3 grid gap-3">
                                 <Input Label="Name" Value="@_userName" ValueChanged="@(value => _userName = value)" Required="true" Disabled="@_isSaving" />
                                 <Input Label="Email" Type="email" Value="@_userEmail" ValueChanged="@(value => _userEmail = value)" Required="true" Disabled="@_isSaving" />
-                                <Input Label="Password" Type="password" Value="@_userPassword" ValueChanged="@(value => _userPassword = value)" Required="true" Disabled="@_isSaving" />
+                                @if (!_userEditId.HasValue)
+                                {
+                                    <Input Label="Password" Type="password" Value="@_userPassword" ValueChanged="@(value => _userPassword = value)" Required="true" Disabled="@_isSaving" />
+                                }
                                 <Input Label="Phone number" Type="tel" Value="@_userPhoneNumber" ValueChanged="@(value => _userPhoneNumber = value)" Required="true" Disabled="@_isSaving" />
                                 <Input Label="Address" Value="@_userAddress" ValueChanged="@(value => _userAddress = value)" Required="true" Disabled="@_isSaving" />
                                 <Input Label="Township code" Value="@_userTownshipCode" ValueChanged="@(value => _userTownshipCode = value)" Required="true" Disabled="@_isSaving" />
@@ -218,7 +222,13 @@
                                         }
                                     </select>
                                 </label>
-                                <Button Type="submit" Disabled="@_isSaving">Create</Button>
+                                <div class="flex flex-wrap gap-2">
+                                    <Button Type="submit" Disabled="@_isSaving">@(_userEditId.HasValue ? "Save" : "Create")</Button>
+                                    @if (_userEditId.HasValue)
+                                    {
+                                        <Button Variant="ghost" OnClick="CancelUserEdit" Disabled="@_isSaving">Cancel</Button>
+                                    }
+                                </div>
                             </div>
                         </form>
                     }
@@ -327,6 +337,8 @@
     private string _userAddress = string.Empty;
     private string _userTownshipCode = string.Empty;
     private string _userRole = "Normal User";
+    private string _userStatus = "Pending";
+    private int? _userEditId;
     private string _serviceGroup = string.Empty;
     private string _serviceType = string.Empty;
     private string _serviceName = string.Empty;
@@ -509,7 +521,7 @@
         await LoadAsync();
     }
 
-    private async Task CreateUserAsync()
+    private async Task SaveUserAsync()
     {
         _actionError = null;
         _actionMessage = null;
@@ -520,7 +532,8 @@
             string.IsNullOrWhiteSpace(_userPhoneNumber) ||
             string.IsNullOrWhiteSpace(_userAddress) ||
             string.IsNullOrWhiteSpace(_userTownshipCode) ||
-            string.IsNullOrWhiteSpace(_userRole))
+            string.IsNullOrWhiteSpace(_userRole) ||
+            (!_userEditId.HasValue && string.IsNullOrWhiteSpace(_userPassword)))
         {
             _actionError = "Fill all required user fields.";
             return;
@@ -528,21 +541,31 @@
 
         _isSaving = true;
 
-        var result = await ApiClient.PostAdminAsJsonAsync<UserListItem>(
-            "api/admin/CreateUser",
-            new UserCreateRequest(_userName, _userEmail, _userPassword, _userPhoneNumber, _userAddress, null, null, _userTownshipCode, _userRole));
+        var userEditId = _userEditId;
+        var result = userEditId.HasValue
+            ? await ApiClient.PutAdminAsJsonAsync<UserListItem>(
+                $"api/Admin/UpdateUser/{userEditId.GetValueOrDefault()}",
+                new UserUpdateRequest(_userName, _userEmail, _userPhoneNumber, _userAddress, null, null, _userTownshipCode, _userRole, _userStatus))
+            : await ApiClient.PostAdminAsJsonAsync<UserListItem>(
+                "api/admin/CreateUser",
+                new UserCreateRequest(_userName, _userEmail, _userPassword, _userPhoneNumber, _userAddress, null, null, _userTownshipCode, _userRole));
+        var isEdit = userEditId.HasValue;
 
         _isSaving = false;
 
         if (!result.IsSuccess)
         {
-            _actionError = string.IsNullOrWhiteSpace(result.Message) ? "Unable to create user." : result.Message;
+            _actionError = string.IsNullOrWhiteSpace(result.Message) ? "Unable to save user." : result.Message;
             return;
         }
 
-        _pageNo = 1;
+        if (!isEdit)
+        {
+            _pageNo = 1;
+        }
+
         ResetUserForm();
-        _actionMessage = "User created.";
+        _actionMessage = isEdit ? "User updated." : "User created.";
         await LoadAsync();
     }
 
@@ -627,6 +650,11 @@
             return;
         }
 
+        if (_userEditId == row.Id.Value)
+        {
+            _userStatus = userStatus;
+        }
+
         _actionMessage = $"User {userStatus.ToLowerInvariant()}.";
         await LoadAsync();
     }
@@ -651,6 +679,32 @@
     private void CancelEdit()
     {
         ResetEditForm();
+    }
+
+    private void StartUserEdit(TableRow row)
+    {
+        if (!row.Id.HasValue || row.User is null)
+        {
+            return;
+        }
+
+        _actionError = null;
+        _actionMessage = null;
+        _confirmActionKey = null;
+        _userEditId = row.Id.Value;
+        _userName = row.User.Name;
+        _userEmail = row.User.Email;
+        _userPassword = string.Empty;
+        _userPhoneNumber = row.User.PhoneNumber;
+        _userAddress = row.User.Address;
+        _userTownshipCode = row.User.TownshipCode;
+        _userRole = row.User.Role;
+        _userStatus = string.Equals(row.Status, "Unknown", StringComparison.OrdinalIgnoreCase) ? "Pending" : row.Status;
+    }
+
+    private void CancelUserEdit()
+    {
+        ResetUserForm();
     }
 
     private void StartServiceEdit(TableRow row)
@@ -777,6 +831,11 @@
         if (_editId == id)
         {
             ResetEditForm();
+        }
+
+        if (Path == "/users" && _userEditId == id)
+        {
+            ResetUserForm();
         }
 
         if (Path == "/emergency-services" && _serviceEditId == id)
@@ -917,6 +976,7 @@
 
     private void ResetUserForm()
     {
+        _userEditId = null;
         _userName = string.Empty;
         _userEmail = string.Empty;
         _userPassword = string.Empty;
@@ -924,6 +984,7 @@
         _userAddress = string.Empty;
         _userTownshipCode = string.Empty;
         _userRole = "Normal User";
+        _userStatus = "Pending";
     }
 
     private void ResetServiceForm()

@@ -75,6 +75,16 @@ public sealed class ApiClient
 
     public async Task<ApiResult<T>> GetAdminAsync<T>(string path, CancellationToken cancellationToken = default)
     {
+        return await SendAdminAsync<T>(HttpMethod.Get, path, cancellationToken);
+    }
+
+    public async Task<ApiResult<T>> PatchAdminAsync<T>(string path, CancellationToken cancellationToken = default)
+    {
+        return await SendAdminAsync<T>(HttpMethod.Patch, path, cancellationToken);
+    }
+
+    private async Task<ApiResult<T>> SendAdminAsync<T>(HttpMethod method, string path, CancellationToken cancellationToken)
+    {
         if (string.IsNullOrWhiteSpace(_authState.Token))
         {
             return ApiResult<T>.Failure("Please sign in again.");
@@ -82,7 +92,7 @@ public sealed class ApiClient
 
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, path);
+            using var request = new HttpRequestMessage(method, path);
             request.Headers.TryAddWithoutValidation("Token", _authState.Token);
 
             using var response = await _http.SendAsync(request, cancellationToken);

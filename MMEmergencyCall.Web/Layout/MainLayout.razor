@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@inject ApiClient ApiClient
 @inject AuthState AuthState
 @inject NavigationManager Navigation
 
@@ -98,8 +99,9 @@ else
         ])
     ];
 
-    private void SignOut()
+    private async Task SignOut()
     {
+        await ApiClient.PostAdminAsJsonAsync<bool>("api/Admin/Signout", new { });
         AuthState.SignOut();
         Navigation.NavigateTo("/login", replace: true);
     }

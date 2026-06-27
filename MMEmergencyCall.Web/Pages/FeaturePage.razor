@@ -122,7 +122,13 @@
                                                     }
                                                     else
                                                     {
-                                                        <Button Variant="danger" OnClick="@(() => AskDelete(row.Id.Value))" Disabled="@_actionId.HasValue">Delete</Button>
+                                                        <div class="flex flex-wrap justify-end gap-2">
+                                                            @if (CanCreateLocations)
+                                                            {
+                                                                <Button Variant="outline" OnClick="@(() => StartEdit(row))" Disabled="@(_actionId.HasValue || _isSaving)">Edit</Button>
+                                                            }
+                                                            <Button Variant="danger" OnClick="@(() => AskDelete(row.Id.Value))" Disabled="@_actionId.HasValue">Delete</Button>
+                                                        </div>
                                                     }
                                                 </div>
                                             }
@@ -155,6 +161,25 @@
                                     <Input Label="State region code" Value="@_createStateRegionCode" ValueChanged="@(value => _createStateRegionCode = value)" Required="true" Disabled="@_isSaving" />
                                 }
                                 <Button Type="submit" Disabled="@_isSaving">Create</Button>
+                            </div>
+                        </form>
+                    }
+                    @if (_editId.HasValue && CanCreateLocations)
+                    {
+                        <form class="rounded-md border border-red-200 bg-red-50 p-4" @onsubmit="UpdateLocationAsync" @onsubmit:preventDefault="true">
+                            <p class="text-sm font-medium text-neutral-950">Edit @CreateLocationLabel</p>
+                            <div class="mt-3 grid gap-3">
+                                <Input Label="Code" Value="@_editCode" ValueChanged="@(value => _editCode = value)" Required="true" Disabled="@_isSaving" />
+                                <Input Label="English name" Value="@_editNameEn" ValueChanged="@(value => _editNameEn = value)" Required="true" Disabled="@_isSaving" />
+                                <Input Label="Myanmar name" Value="@_editNameMm" ValueChanged="@(value => _editNameMm = value)" Required="true" Disabled="@_isSaving" />
+                                @if (Path == "/townships")
+                                {
+                                    <Input Label="State region code" Value="@_editStateRegionCode" ValueChanged="@(value => _editStateRegionCode = value)" Required="true" Disabled="@_isSaving" />
+                                }
+                                <div class="flex flex-wrap gap-2">
+                                    <Button Type="submit" Disabled="@_isSaving">Save</Button>
+                                    <Button Variant="ghost" OnClick="CancelEdit" Disabled="@_isSaving">Cancel</Button>
+                                </div>
                             </div>
                         </form>
                     }
@@ -229,6 +254,11 @@
     private string _createNameEn = string.Empty;
     private string _createNameMm = string.Empty;
     private string _createStateRegionCode = string.Empty;
+    private int? _editId;
+    private string _editCode = string.Empty;
+    private string _editNameEn = string.Empty;
+    private string _editNameMm = string.Empty;
+    private string _editStateRegionCode = string.Empty;
     private string? _confirmActionKey;
     private int? _actionId;
     private bool _hasPagination;
@@ -276,6 +306,7 @@
             _statusFilter = string.Empty;
             _roleFilter = string.Empty;
             ResetCreateForm();
+            ResetEditForm();
             await LoadAsync();
         }
     }
@@ -314,7 +345,7 @@
             case "/townships":
                 await LoadPagedAsync<TownshipListItem>(
                     $"api/Township/pageNo/{_pageNo}/pageSize/{PageSize}",
-                    x => new TableRow(TextOrFallback(x.TownshipNameEn, x.TownshipCode), x.TownshipNameMm, x.StateRegionCode, x.TownshipCode, "muted", x.TownshipId));
+                    x => new TableRow(TextOrFallback(x.TownshipNameEn, x.TownshipCode), x.TownshipNameMm, x.StateRegionCode, x.TownshipCode, "muted", x.TownshipId, x.TownshipCode, x.StateRegionCode));
                 break;
             case "/state-regions":
                 await LoadStateRegionsAsync();
@@ -365,7 +396,7 @@
         {
             var result = await ApiClient.PostAdminAsJsonAsync<TownshipListItem>(
                 "api/Township",
-                new TownshipCreateRequest(_createCode, _createNameEn, _createNameMm, _createStateRegionCode));
+                new TownshipRequest(_createCode, _createNameEn, _createNameMm, _createStateRegionCode));
             isSuccess = result.IsSuccess;
             message = result.Message;
         }
@@ -373,7 +404,7 @@
         {
             var result = await ApiClient.PostAdminAsJsonAsync<StateRegionListItem>(
                 "api/StateRegion",
-                new StateRegionCreateRequest(_createCode, _createNameEn, _createNameMm));
+                new StateRegionRequest(_createCode, _createNameEn, _createNameMm));
             isSuccess = result.IsSuccess;
             message = result.Message;
         }
@@ -389,6 +420,82 @@
         _pageNo = 1;
         ResetCreateForm();
         _actionMessage = $"{Current.Title.TrimEnd('s')} created.";
+        await LoadAsync();
+    }
+
+    private void StartEdit(TableRow row)
+    {
+        if (!row.Id.HasValue)
+        {
+            return;
+        }
+
+        _actionError = null;
+        _actionMessage = null;
+        _confirmActionKey = null;
+        _editId = row.Id.Value;
+        _editCode = row.Code;
+        _editNameEn = row.Name;
+        _editNameMm = row.Secondary == "No Myanmar name" ? string.Empty : row.Secondary;
+        _editStateRegionCode = row.ParentCode;
+    }
+
+    private void CancelEdit()
+    {
+        ResetEditForm();
+    }
+
+    private async Task UpdateLocationAsync()
+    {
+        _actionError = null;
+        _actionMessage = null;
+
+        if (!_editId.HasValue)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_editCode) ||
+            string.IsNullOrWhiteSpace(_editNameEn) ||
+            string.IsNullOrWhiteSpace(_editNameMm) ||
+            (Path == "/townships" && string.IsNullOrWhiteSpace(_editStateRegionCode)))
+        {
+            _actionError = "Fill all required location fields.";
+            return;
+        }
+
+        _isSaving = true;
+
+        var isSuccess = false;
+        string? message = null;
+
+        if (Path == "/townships")
+        {
+            var result = await ApiClient.PutAdminAsJsonAsync<TownshipListItem>(
+                $"api/Township/{_editId.Value}",
+                new TownshipRequest(_editCode, _editNameEn, _editNameMm, _editStateRegionCode));
+            isSuccess = result.IsSuccess;
+            message = result.Message;
+        }
+        else
+        {
+            var result = await ApiClient.PutAdminAsJsonAsync<StateRegionListItem>(
+                $"api/StateRegion/{_editId.Value}",
+                new StateRegionRequest(_editCode, _editNameEn, _editNameMm));
+            isSuccess = result.IsSuccess;
+            message = result.Message;
+        }
+
+        _isSaving = false;
+
+        if (!isSuccess)
+        {
+            _actionError = string.IsNullOrWhiteSpace(message) ? "Unable to update location record." : message;
+            return;
+        }
+
+        ResetEditForm();
+        _actionMessage = $"{Current.Title.TrimEnd('s')} updated.";
         await LoadAsync();
     }
 
@@ -432,6 +539,11 @@
         if (_rows.Count == 1 && _pageNo > 1)
         {
             _pageNo--;
+        }
+
+        if (_editId == id)
+        {
+            ResetEditForm();
         }
 
         await LoadAsync();
@@ -538,7 +650,7 @@
 
         _rows = result.Data
             .Take(10)
-            .Select(x => new TableRow(TextOrFallback(x.StateRegionNameEn, x.StateRegionCode), TextOrFallback(x.StateRegionNameMm, "No Myanmar name"), "Active", x.StateRegionCode, "muted", x.StateRegionId))
+            .Select(x => new TableRow(TextOrFallback(x.StateRegionNameEn, x.StateRegionCode), TextOrFallback(x.StateRegionNameMm, "No Myanmar name"), "Active", x.StateRegionCode, "muted", x.StateRegionId, x.StateRegionCode))
             .ToList();
         _pageLabel = "1";
     }
@@ -554,6 +666,15 @@
         _createNameEn = string.Empty;
         _createNameMm = string.Empty;
         _createStateRegionCode = string.Empty;
+    }
+
+    private void ResetEditForm()
+    {
+        _editId = null;
+        _editCode = string.Empty;
+        _editNameEn = string.Empty;
+        _editNameMm = string.Empty;
+        _editStateRegionCode = string.Empty;
     }
 
     private static string StatusVariant(string? status)
@@ -595,11 +716,11 @@
 
     private sealed record FeaturePageInfo(string Group, string Title, string Description, string TableTitle, string TableSubtitle, string EmptyText);
 
-    private sealed record TableRow(string Name, string Secondary, string Status, string Detail, string BadgeVariant, int? Id = null);
+    private sealed record TableRow(string Name, string Secondary, string Status, string Detail, string BadgeVariant, int? Id = null, string Code = "", string ParentCode = "");
 
     private sealed record RequestStatusUpdate(string Status);
 
-    private sealed record TownshipCreateRequest(string TownshipCode, string TownshipNameEn, string TownshipNameMm, string StateRegionCode);
+    private sealed record TownshipRequest(string TownshipCode, string TownshipNameEn, string TownshipNameMm, string StateRegionCode);
 
-    private sealed record StateRegionCreateRequest(string StateRegionCode, string StateRegionNameEn, string StateRegionNameMm);
+    private sealed record StateRegionRequest(string StateRegionCode, string StateRegionNameEn, string StateRegionNameMm);
 }

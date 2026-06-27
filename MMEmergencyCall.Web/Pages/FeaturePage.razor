@@ -127,6 +127,17 @@
                                                             {
                                                                 <Button Variant="outline" OnClick="@(() => StartEdit(row))" Disabled="@(_actionId.HasValue || _isSaving)">Edit</Button>
                                                             }
+                                                            @if (CanUpdateUsers && row.User is not null)
+                                                            {
+                                                                @if (!IsActivated(row.Status))
+                                                                {
+                                                                    <Button OnClick='@(() => UpdateUserStatusAsync(row, "Activated"))' Disabled="@_actionId.HasValue">Activate</Button>
+                                                                }
+                                                                @if (!IsDeactivated(row.Status))
+                                                                {
+                                                                    <Button Variant="outline" OnClick='@(() => UpdateUserStatusAsync(row, "Deactivated"))' Disabled="@_actionId.HasValue">Deactivate</Button>
+                                                                }
+                                                            }
                                                             <Button Variant="danger" OnClick="@(() => AskDelete(row.Id.Value))" Disabled="@_actionId.HasValue">Delete</Button>
                                                         </div>
                                                     }
@@ -303,6 +314,7 @@
     private bool CanDeleteRows => Path is "/emergency-services" or "/users" or "/townships" or "/state-regions";
     private bool CanCreateLocations => Path is "/townships" or "/state-regions";
     private bool CanCreateUsers => Path == "/users";
+    private bool CanUpdateUsers => Path == "/users";
     private string CreateLocationLabel => Path == "/townships" ? "township" : "state region";
     private bool ShowRoleFilter => Path == "/users";
     private bool ShowStatusFilter => Path is "/emergency-requests" or "/emergency-services" or "/users";
@@ -373,7 +385,7 @@
             case "/users":
                 await LoadPagedAsync<UserListItem>(
                     WithQuery($"api/admin/UserList/pageNo/{_pageNo}/pageSize/{PageSize}", ("role", _roleFilter), ("userStatus", _statusFilter)),
-                    x => new TableRow(TextOrFallback(x.Name, $"User #{x.UserId}"), $"{x.Email} / {x.Role}", TextOrFallback(x.UserStatus, "Unknown"), TextOrFallback(x.TownshipCode, "No township"), StatusVariant(x.UserStatus), x.UserId));
+                    x => new TableRow(TextOrFallback(x.Name, $"User #{x.UserId}"), $"{x.Email} / {x.Role}", TextOrFallback(x.UserStatus, "Unknown"), TextOrFallback(x.TownshipCode, "No township"), StatusVariant(x.UserStatus), x.UserId, User: new UserRow(x.Name, x.Email, x.PhoneNumber, x.Address, x.EmergencyType, x.EmergencyDetails, x.TownshipCode, x.Role)));
                 break;
             case "/townships":
                 await LoadPagedAsync<TownshipListItem>(
@@ -495,6 +507,42 @@
         _pageNo = 1;
         ResetUserForm();
         _actionMessage = "User created.";
+        await LoadAsync();
+    }
+
+    private async Task UpdateUserStatusAsync(TableRow row, string userStatus)
+    {
+        if (!row.Id.HasValue || row.User is null)
+        {
+            return;
+        }
+
+        _actionError = null;
+        _actionMessage = null;
+        _actionId = row.Id.Value;
+
+        var result = await ApiClient.PutAdminAsJsonAsync<UserListItem>(
+            $"api/Admin/UpdateUser/{row.Id.Value}",
+            new UserUpdateRequest(
+                row.User.Name,
+                row.User.Email,
+                row.User.PhoneNumber,
+                row.User.Address,
+                row.User.EmergencyType,
+                row.User.EmergencyDetails,
+                row.User.TownshipCode,
+                row.User.Role,
+                userStatus));
+
+        _actionId = null;
+
+        if (!result.IsSuccess)
+        {
+            _actionError = string.IsNullOrWhiteSpace(result.Message) ? "Unable to update user status." : result.Message;
+            return;
+        }
+
+        _actionMessage = $"User {userStatus.ToLowerInvariant()}.";
         await LoadAsync();
     }
 
@@ -785,6 +833,16 @@
         return string.Equals(status, "Deleted", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsActivated(string? status)
+    {
+        return string.Equals(status, "Activated", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsDeactivated(string? status)
+    {
+        return string.Equals(status, "Deactivated", StringComparison.OrdinalIgnoreCase);
+    }
+
     private string DeleteActionKey(int id)
     {
         return $"{Path}:{id}";
@@ -802,11 +860,15 @@
 
     private sealed record FeaturePageInfo(string Group, string Title, string Description, string TableTitle, string TableSubtitle, string EmptyText);
 
-    private sealed record TableRow(string Name, string Secondary, string Status, string Detail, string BadgeVariant, int? Id = null, string Code = "", string ParentCode = "");
+    private sealed record TableRow(string Name, string Secondary, string Status, string Detail, string BadgeVariant, int? Id = null, string Code = "", string ParentCode = "", UserRow? User = null);
 
     private sealed record RequestStatusUpdate(string Status);
 
+    private sealed record UserRow(string Name, string Email, string PhoneNumber, string Address, string? EmergencyType, string? EmergencyDetails, string TownshipCode, string Role);
+
     private sealed record UserCreateRequest(string Name, string Email, string Password, string PhoneNumber, string Address, string? EmergencyType, string? EmergencyDetails, string TownshipCode, string Role);
+
+    private sealed record UserUpdateRequest(string Name, string Email, string PhoneNumber, string Address, string? EmergencyType, string? EmergencyDetails, string TownshipCode, string Role, string UserStatus);
 
     private sealed record TownshipRequest(string TownshipCode, string TownshipNameEn, string TownshipNameMm, string StateRegionCode);
 

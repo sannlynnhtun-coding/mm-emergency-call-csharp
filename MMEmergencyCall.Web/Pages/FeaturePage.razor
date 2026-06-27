@@ -127,6 +127,10 @@
                                                             {
                                                                 <Button Variant="outline" OnClick="@(() => StartEdit(row))" Disabled="@(_actionId.HasValue || _isSaving)">Edit</Button>
                                                             }
+                                                            @if (CanManageServices && row.Service is not null)
+                                                            {
+                                                                <Button Variant="outline" OnClick="@(() => StartServiceEdit(row))" Disabled="@(_actionId.HasValue || _isSaving)">Edit</Button>
+                                                            }
                                                             @if (CanUpdateUsers && row.User is not null)
                                                             {
                                                                 @if (!IsActivated(row.Status))
@@ -218,10 +222,10 @@
                             </div>
                         </form>
                     }
-                    @if (CanCreateServices)
+                    @if (CanManageServices)
                     {
-                        <form class="rounded-md border border-neutral-200 bg-neutral-50 p-4" @onsubmit="CreateServiceAsync" @onsubmit:preventDefault="true">
-                            <p class="text-sm font-medium text-neutral-950">Create emergency service</p>
+                        <form class="rounded-md border border-neutral-200 bg-neutral-50 p-4" @onsubmit="SaveServiceAsync" @onsubmit:preventDefault="true">
+                            <p class="text-sm font-medium text-neutral-950">@(_serviceEditId.HasValue ? "Edit emergency service" : "Create emergency service")</p>
                             <div class="mt-3 grid gap-3">
                                 <Input Label="Service group" Value="@_serviceGroup" ValueChanged="@(value => _serviceGroup = value)" Required="true" Disabled="@_isSaving" />
                                 <Input Label="Service type" Value="@_serviceType" ValueChanged="@(value => _serviceType = value)" Required="true" Disabled="@_isSaving" />
@@ -230,7 +234,13 @@
                                 <Input Label="Location" Value="@_serviceLocation" ValueChanged="@(value => _serviceLocation = value)" Disabled="@_isSaving" />
                                 <Input Label="Availability" Value="@_serviceAvailability" ValueChanged="@(value => _serviceAvailability = value)" Disabled="@_isSaving" maxlength="1" />
                                 <Input Label="Township code" Value="@_serviceTownshipCode" ValueChanged="@(value => _serviceTownshipCode = value)" Disabled="@_isSaving" />
-                                <Button Type="submit" Disabled="@_isSaving">Create</Button>
+                                <div class="flex flex-wrap gap-2">
+                                    <Button Type="submit" Disabled="@_isSaving">@(_serviceEditId.HasValue ? "Save" : "Create")</Button>
+                                    @if (_serviceEditId.HasValue)
+                                    {
+                                        <Button Variant="ghost" OnClick="CancelServiceEdit" Disabled="@_isSaving">Cancel</Button>
+                                    }
+                                </div>
                             </div>
                         </form>
                     }
@@ -324,6 +334,7 @@
     private string _serviceLocation = string.Empty;
     private string _serviceAvailability = string.Empty;
     private string _serviceTownshipCode = string.Empty;
+    private int? _serviceEditId;
     private string? _confirmActionKey;
     private int? _actionId;
     private bool _hasPagination;
@@ -338,7 +349,7 @@
     private bool CanCreateLocations => Path is "/townships" or "/state-regions";
     private bool CanCreateUsers => Path == "/users";
     private bool CanUpdateUsers => Path == "/users";
-    private bool CanCreateServices => Path == "/emergency-services";
+    private bool CanManageServices => Path == "/emergency-services";
     private string CreateLocationLabel => Path == "/townships" ? "township" : "state region";
     private bool ShowRoleFilter => Path == "/users";
     private bool ShowStatusFilter => Path is "/emergency-requests" or "/emergency-services" or "/users";
@@ -400,7 +411,7 @@
             case "/emergency-services":
                 await LoadPagedAsync<EmergencyServiceListItem>(
                     WithQuery($"api/Admin/EmergencyService/pageNo/{_pageNo}/pageSize/{PageSize}", ("serviceStatus", _statusFilter)),
-                    x => new TableRow(TextOrFallback(x.ServiceName, $"Service #{x.ServiceId}"), $"{x.ServiceType} / {x.PhoneNumber}", TextOrFallback(x.ServiceStatus, "Unknown"), TextOrFallback(x.TownshipCode, "No township"), StatusVariant(x.ServiceStatus), x.ServiceId));
+                    x => new TableRow(TextOrFallback(x.ServiceName, $"Service #{x.ServiceId}"), $"{x.ServiceType} / {x.PhoneNumber}", TextOrFallback(x.ServiceStatus, "Unknown"), TextOrFallback(x.TownshipCode, "No township"), StatusVariant(x.ServiceStatus), x.ServiceId, Service: new ServiceRow(x.ServiceGroup, x.ServiceType, x.ServiceName, x.PhoneNumber, x.Location, x.Availability, x.TownshipCode)));
                 break;
             case "/service-approvals":
                 await LoadPagedAsync<EmergencyServiceListItem>(
@@ -535,7 +546,7 @@
         await LoadAsync();
     }
 
-    private async Task CreateServiceAsync()
+    private async Task SaveServiceAsync()
     {
         _actionError = null;
         _actionMessage = null;
@@ -551,28 +562,36 @@
 
         _isSaving = true;
 
-        var result = await ApiClient.PostAdminAsJsonAsync<EmergencyServiceListItem>(
-            "api/admin/CreateEmergencyService",
-            new EmergencyServiceRequest(
-                _serviceGroup,
-                _serviceType,
-                _serviceName,
-                _servicePhoneNumber,
-                _serviceLocation,
-                _serviceAvailability,
-                _serviceTownshipCode));
+        var request = new EmergencyServiceRequest(
+            _serviceGroup,
+            _serviceType,
+            _serviceName,
+            _servicePhoneNumber,
+            _serviceLocation,
+            _serviceAvailability,
+            _serviceTownshipCode);
+
+        var serviceEditId = _serviceEditId;
+        var result = serviceEditId.HasValue
+            ? await ApiClient.PatchAdminAsJsonAsync<EmergencyServiceListItem>($"api/admin/UpdateEmergencyService/{serviceEditId.GetValueOrDefault()}", request)
+            : await ApiClient.PostAdminAsJsonAsync<EmergencyServiceListItem>("api/admin/CreateEmergencyService", request);
+        var isEdit = serviceEditId.HasValue;
 
         _isSaving = false;
 
         if (!result.IsSuccess)
         {
-            _actionError = string.IsNullOrWhiteSpace(result.Message) ? "Unable to create emergency service." : result.Message;
+            _actionError = string.IsNullOrWhiteSpace(result.Message) ? "Unable to save emergency service." : result.Message;
             return;
         }
 
-        _pageNo = 1;
+        if (!isEdit)
+        {
+            _pageNo = 1;
+        }
+
         ResetServiceForm();
-        _actionMessage = "Emergency service created.";
+        _actionMessage = isEdit ? "Emergency service updated." : "Emergency service created.";
         await LoadAsync();
     }
 
@@ -632,6 +651,31 @@
     private void CancelEdit()
     {
         ResetEditForm();
+    }
+
+    private void StartServiceEdit(TableRow row)
+    {
+        if (!row.Id.HasValue || row.Service is null)
+        {
+            return;
+        }
+
+        _actionError = null;
+        _actionMessage = null;
+        _confirmActionKey = null;
+        _serviceEditId = row.Id.Value;
+        _serviceGroup = row.Service.ServiceGroup;
+        _serviceType = row.Service.ServiceType;
+        _serviceName = row.Service.ServiceName;
+        _servicePhoneNumber = row.Service.PhoneNumber;
+        _serviceLocation = row.Service.Location ?? string.Empty;
+        _serviceAvailability = row.Service.Availability ?? string.Empty;
+        _serviceTownshipCode = row.Service.TownshipCode ?? string.Empty;
+    }
+
+    private void CancelServiceEdit()
+    {
+        ResetServiceForm();
     }
 
     private async Task UpdateLocationAsync()
@@ -733,6 +777,11 @@
         if (_editId == id)
         {
             ResetEditForm();
+        }
+
+        if (Path == "/emergency-services" && _serviceEditId == id)
+        {
+            ResetServiceForm();
         }
 
         await LoadAsync();
@@ -879,6 +928,7 @@
 
     private void ResetServiceForm()
     {
+        _serviceEditId = null;
         _serviceGroup = string.Empty;
         _serviceType = string.Empty;
         _serviceName = string.Empty;
@@ -937,7 +987,7 @@
 
     private sealed record FeaturePageInfo(string Group, string Title, string Description, string TableTitle, string TableSubtitle, string EmptyText);
 
-    private sealed record TableRow(string Name, string Secondary, string Status, string Detail, string BadgeVariant, int? Id = null, string Code = "", string ParentCode = "", UserRow? User = null);
+    private sealed record TableRow(string Name, string Secondary, string Status, string Detail, string BadgeVariant, int? Id = null, string Code = "", string ParentCode = "", UserRow? User = null, ServiceRow? Service = null);
 
     private sealed record RequestStatusUpdate(string Status);
 
@@ -946,6 +996,8 @@
     private sealed record UserCreateRequest(string Name, string Email, string Password, string PhoneNumber, string Address, string? EmergencyType, string? EmergencyDetails, string TownshipCode, string Role);
 
     private sealed record UserUpdateRequest(string Name, string Email, string PhoneNumber, string Address, string? EmergencyType, string? EmergencyDetails, string TownshipCode, string Role, string UserStatus);
+
+    private sealed record ServiceRow(string ServiceGroup, string ServiceType, string ServiceName, string PhoneNumber, string? Location, string? Availability, string? TownshipCode);
 
     private sealed record EmergencyServiceRequest(string ServiceGroup, string ServiceType, string ServiceName, string PhoneNumber, string? Location, string? Availability, string? TownshipCode);
 

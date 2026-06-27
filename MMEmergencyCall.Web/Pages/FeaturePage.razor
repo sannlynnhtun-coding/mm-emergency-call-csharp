@@ -218,6 +218,22 @@
                             </div>
                         </form>
                     }
+                    @if (CanCreateServices)
+                    {
+                        <form class="rounded-md border border-neutral-200 bg-neutral-50 p-4" @onsubmit="CreateServiceAsync" @onsubmit:preventDefault="true">
+                            <p class="text-sm font-medium text-neutral-950">Create emergency service</p>
+                            <div class="mt-3 grid gap-3">
+                                <Input Label="Service group" Value="@_serviceGroup" ValueChanged="@(value => _serviceGroup = value)" Required="true" Disabled="@_isSaving" />
+                                <Input Label="Service type" Value="@_serviceType" ValueChanged="@(value => _serviceType = value)" Required="true" Disabled="@_isSaving" />
+                                <Input Label="Service name" Value="@_serviceName" ValueChanged="@(value => _serviceName = value)" Required="true" Disabled="@_isSaving" />
+                                <Input Label="Phone number" Type="tel" Value="@_servicePhoneNumber" ValueChanged="@(value => _servicePhoneNumber = value)" Required="true" Disabled="@_isSaving" />
+                                <Input Label="Location" Value="@_serviceLocation" ValueChanged="@(value => _serviceLocation = value)" Disabled="@_isSaving" />
+                                <Input Label="Availability" Value="@_serviceAvailability" ValueChanged="@(value => _serviceAvailability = value)" Disabled="@_isSaving" maxlength="1" />
+                                <Input Label="Township code" Value="@_serviceTownshipCode" ValueChanged="@(value => _serviceTownshipCode = value)" Disabled="@_isSaving" />
+                                <Button Type="submit" Disabled="@_isSaving">Create</Button>
+                            </div>
+                        </form>
+                    }
                     @if (ShowStatusFilter || ShowRoleFilter)
                     {
                         <div class="rounded-md border border-neutral-200 bg-neutral-50 p-4">
@@ -301,6 +317,13 @@
     private string _userAddress = string.Empty;
     private string _userTownshipCode = string.Empty;
     private string _userRole = "Normal User";
+    private string _serviceGroup = string.Empty;
+    private string _serviceType = string.Empty;
+    private string _serviceName = string.Empty;
+    private string _servicePhoneNumber = string.Empty;
+    private string _serviceLocation = string.Empty;
+    private string _serviceAvailability = string.Empty;
+    private string _serviceTownshipCode = string.Empty;
     private string? _confirmActionKey;
     private int? _actionId;
     private bool _hasPagination;
@@ -315,6 +338,7 @@
     private bool CanCreateLocations => Path is "/townships" or "/state-regions";
     private bool CanCreateUsers => Path == "/users";
     private bool CanUpdateUsers => Path == "/users";
+    private bool CanCreateServices => Path == "/emergency-services";
     private string CreateLocationLabel => Path == "/townships" ? "township" : "state region";
     private bool ShowRoleFilter => Path == "/users";
     private bool ShowStatusFilter => Path is "/emergency-requests" or "/emergency-services" or "/users";
@@ -352,6 +376,7 @@
             ResetCreateForm();
             ResetEditForm();
             ResetUserForm();
+            ResetServiceForm();
             await LoadAsync();
         }
     }
@@ -507,6 +532,47 @@
         _pageNo = 1;
         ResetUserForm();
         _actionMessage = "User created.";
+        await LoadAsync();
+    }
+
+    private async Task CreateServiceAsync()
+    {
+        _actionError = null;
+        _actionMessage = null;
+
+        if (string.IsNullOrWhiteSpace(_serviceGroup) ||
+            string.IsNullOrWhiteSpace(_serviceType) ||
+            string.IsNullOrWhiteSpace(_serviceName) ||
+            string.IsNullOrWhiteSpace(_servicePhoneNumber))
+        {
+            _actionError = "Fill all required service fields.";
+            return;
+        }
+
+        _isSaving = true;
+
+        var result = await ApiClient.PostAdminAsJsonAsync<EmergencyServiceListItem>(
+            "api/admin/CreateEmergencyService",
+            new EmergencyServiceRequest(
+                _serviceGroup,
+                _serviceType,
+                _serviceName,
+                _servicePhoneNumber,
+                _serviceLocation,
+                _serviceAvailability,
+                _serviceTownshipCode));
+
+        _isSaving = false;
+
+        if (!result.IsSuccess)
+        {
+            _actionError = string.IsNullOrWhiteSpace(result.Message) ? "Unable to create emergency service." : result.Message;
+            return;
+        }
+
+        _pageNo = 1;
+        ResetServiceForm();
+        _actionMessage = "Emergency service created.";
         await LoadAsync();
     }
 
@@ -811,6 +877,17 @@
         _userRole = "Normal User";
     }
 
+    private void ResetServiceForm()
+    {
+        _serviceGroup = string.Empty;
+        _serviceType = string.Empty;
+        _serviceName = string.Empty;
+        _servicePhoneNumber = string.Empty;
+        _serviceLocation = string.Empty;
+        _serviceAvailability = string.Empty;
+        _serviceTownshipCode = string.Empty;
+    }
+
     private static string StatusVariant(string? status)
     {
         return string.Equals(status, "Pending", StringComparison.OrdinalIgnoreCase) ||
@@ -869,6 +946,8 @@
     private sealed record UserCreateRequest(string Name, string Email, string Password, string PhoneNumber, string Address, string? EmergencyType, string? EmergencyDetails, string TownshipCode, string Role);
 
     private sealed record UserUpdateRequest(string Name, string Email, string PhoneNumber, string Address, string? EmergencyType, string? EmergencyDetails, string TownshipCode, string Role, string UserStatus);
+
+    private sealed record EmergencyServiceRequest(string ServiceGroup, string ServiceType, string ServiceName, string PhoneNumber, string? Location, string? Availability, string? TownshipCode);
 
     private sealed record TownshipRequest(string TownshipCode, string TownshipNameEn, string TownshipNameMm, string StateRegionCode);
 

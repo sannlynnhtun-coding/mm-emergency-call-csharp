@@ -37,12 +37,20 @@
     {
         <div class="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
             <Card Class="p-5">
-                <div class="flex items-center justify-between gap-4">
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h2 class="text-lg font-semibold text-neutral-950">@Current.TableTitle</h2>
                         <p class="mt-1 text-sm text-neutral-600">@Current.TableSubtitle</p>
                     </div>
-                    <Badge Variant="muted">@_rows.Count rows</Badge>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <Badge Variant="muted">@_rows.Count rows</Badge>
+                        @if (_hasPagination)
+                        {
+                            <Button Variant="outline" OnClick="PreviousPageAsync" Disabled="@(!_canGoPrevious)">Previous</Button>
+                            <span class="text-sm font-medium tabular-nums text-neutral-600">@_pageLabel</span>
+                            <Button Variant="outline" OnClick="NextPageAsync" Disabled="@(!_canGoNext)">Next</Button>
+                        }
+                    </div>
                 </div>
 
                 <div class="mt-5 overflow-hidden rounded-md border border-neutral-200">
@@ -102,12 +110,19 @@
 @code {
     private FeaturePageInfo Current => Pages.GetValueOrDefault(Path, Pages["/emergency-requests"]);
     private string Path => new Uri(Navigation.Uri).AbsolutePath.ToLowerInvariant();
+    private const int PageSize = 10;
 
     private List<TableRow> _rows = new();
+    private int _pageNo = 1;
+    private int _pageCount = 1;
     private string _pageLabel = "1";
     private string? _loadedPath;
     private string? _error;
+    private bool _hasPagination;
+    private bool _isEndOfPage = true;
     private bool _isLoading;
+    private bool _canGoPrevious => _hasPagination && !_isLoading && _pageNo > 1;
+    private bool _canGoNext => _hasPagination && !_isLoading && !_isEndOfPage && _pageNo < _pageCount;
 
     private static readonly Dictionary<string, FeaturePageInfo> Pages = new()
     {
@@ -129,6 +144,7 @@
 
         if (_loadedPath != Path)
         {
+            _pageNo = 1;
             await LoadAsync();
         }
     }
@@ -138,34 +154,33 @@
         _isLoading = true;
         _error = null;
         _rows = new();
-        _pageLabel = "1";
         _loadedPath = Path;
 
         switch (Path)
         {
             case "/emergency-requests":
                 await LoadPagedAsync<EmergencyRequestListItem>(
-                    "api/admin/EmergencyRequestList/pageNo/1/pageSize/10",
+                    $"api/admin/EmergencyRequestList/pageNo/{_pageNo}/pageSize/{PageSize}",
                     x => new TableRow($"Request #{x.RequestId}", $"User {x.UserId} / Service {x.ServiceId}", x.Status, x.RequestTime.ToLocalTime().ToString("g"), StatusVariant(x.Status)));
                 break;
             case "/emergency-services":
                 await LoadPagedAsync<EmergencyServiceListItem>(
-                    "api/Admin/EmergencyService/pageNo/1/pageSize/10",
+                    $"api/Admin/EmergencyService/pageNo/{_pageNo}/pageSize/{PageSize}",
                     x => new TableRow(TextOrFallback(x.ServiceName, $"Service #{x.ServiceId}"), $"{x.ServiceType} / {x.PhoneNumber}", TextOrFallback(x.ServiceStatus, "Unknown"), TextOrFallback(x.TownshipCode, "No township"), StatusVariant(x.ServiceStatus)));
                 break;
             case "/service-approvals":
                 await LoadPagedAsync<EmergencyServiceListItem>(
-                    "api/Admin/EmergencyService/pageNo/1/pageSize/10?serviceStatus=Pending",
+                    $"api/Admin/EmergencyService/pageNo/{_pageNo}/pageSize/{PageSize}?serviceStatus=Pending",
                     x => new TableRow(TextOrFallback(x.ServiceName, $"Service #{x.ServiceId}"), $"{x.ServiceType} / {x.PhoneNumber}", TextOrFallback(x.ServiceStatus, "Pending"), TextOrFallback(x.TownshipCode, "No township"), StatusVariant(x.ServiceStatus)));
                 break;
             case "/users":
                 await LoadPagedAsync<UserListItem>(
-                    "api/admin/UserList/pageNo/1/pageSize/10",
+                    $"api/admin/UserList/pageNo/{_pageNo}/pageSize/{PageSize}",
                     x => new TableRow(TextOrFallback(x.Name, $"User #{x.UserId}"), $"{x.Email} / {x.Role}", TextOrFallback(x.UserStatus, "Unknown"), TextOrFallback(x.TownshipCode, "No township"), StatusVariant(x.UserStatus)));
                 break;
             case "/townships":
                 await LoadPagedAsync<TownshipListItem>(
-                    "api/Township/pageNo/1/pageSize/10",
+                    $"api/Township/pageNo/{_pageNo}/pageSize/{PageSize}",
                     x => new TableRow(TextOrFallback(x.TownshipNameEn, x.TownshipCode), x.TownshipNameMm, x.StateRegionCode, x.TownshipCode, "muted"));
                 break;
             case "/state-regions":
@@ -176,8 +191,31 @@
         _isLoading = false;
     }
 
+    private Task PreviousPageAsync()
+    {
+        return GoToPageAsync(_pageNo - 1);
+    }
+
+    private Task NextPageAsync()
+    {
+        return GoToPageAsync(_pageNo + 1);
+    }
+
+    private async Task GoToPageAsync(int pageNo)
+    {
+        if (pageNo < 1 || pageNo == _pageNo)
+        {
+            return;
+        }
+
+        _pageNo = pageNo;
+        await LoadAsync();
+    }
+
     private async Task LoadPagedAsync<T>(string path, Func<T, TableRow> map)
     {
+        _hasPagination = true;
+
         var result = await ApiClient.GetAdminAsync<PagedList<T>>(path);
         if (!result.IsSuccess || result.Data is null)
         {
@@ -186,11 +224,19 @@
         }
 
         _rows = result.Data.Data.Select(map).ToList();
-        _pageLabel = $"{result.Data.PageNo} / {Math.Max(result.Data.PageCount, 1)}";
+        _pageNo = result.Data.PageNo;
+        _pageCount = Math.Max(result.Data.PageCount, 1);
+        _isEndOfPage = result.Data.IsEndOfPage;
+        _pageLabel = $"{_pageNo} / {_pageCount}";
     }
 
     private async Task LoadStateRegionsAsync()
     {
+        _hasPagination = false;
+        _pageNo = 1;
+        _pageCount = 1;
+        _isEndOfPage = true;
+
         var result = await ApiClient.GetAdminAsync<List<StateRegionListItem>>("api/StateRegion");
         if (!result.IsSuccess || result.Data is null)
         {

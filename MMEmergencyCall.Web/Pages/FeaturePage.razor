@@ -213,7 +213,7 @@
     private bool _canGoNext => _hasPagination && !_isLoading && !_isEndOfPage && _pageNo < _pageCount;
     private bool CanUpdateRequests => Path == "/emergency-requests";
     private bool CanApproveServices => Path == "/service-approvals";
-    private bool CanDeleteRows => Path is "/emergency-services" or "/users";
+    private bool CanDeleteRows => Path is "/emergency-services" or "/users" or "/townships" or "/state-regions";
     private bool ShowRoleFilter => Path == "/users";
     private bool ShowStatusFilter => Path is "/emergency-requests" or "/emergency-services" or "/users";
     private string[] StatusOptions => Path switch
@@ -285,7 +285,7 @@
             case "/townships":
                 await LoadPagedAsync<TownshipListItem>(
                     $"api/Township/pageNo/{_pageNo}/pageSize/{PageSize}",
-                    x => new TableRow(TextOrFallback(x.TownshipNameEn, x.TownshipCode), x.TownshipNameMm, x.StateRegionCode, x.TownshipCode, "muted"));
+                    x => new TableRow(TextOrFallback(x.TownshipNameEn, x.TownshipCode), x.TownshipNameMm, x.StateRegionCode, x.TownshipCode, "muted", x.TownshipId));
                 break;
             case "/state-regions":
                 await LoadStateRegionsAsync();
@@ -329,9 +329,13 @@
         _actionError = null;
         _actionId = id;
 
-        var path = Path == "/users"
-            ? $"api/DeleteUser/{id}"
-            : $"api/admin/DeleteEmergencyService/{id}";
+        var path = Path switch
+        {
+            "/users" => $"api/DeleteUser/{id}",
+            "/townships" => $"api/Township/{id}",
+            "/state-regions" => $"api/StateRegion/{id}",
+            _ => $"api/admin/DeleteEmergencyService/{id}"
+        };
 
         var result = await ApiClient.DeleteAdminAsync<bool>(path);
 
@@ -451,7 +455,7 @@
 
         _rows = result.Data
             .Take(10)
-            .Select(x => new TableRow(TextOrFallback(x.StateRegionNameEn, x.StateRegionCode), TextOrFallback(x.StateRegionNameMm, "No Myanmar name"), "Active", x.StateRegionCode, "muted"))
+            .Select(x => new TableRow(TextOrFallback(x.StateRegionNameEn, x.StateRegionCode), TextOrFallback(x.StateRegionNameMm, "No Myanmar name"), "Active", x.StateRegionCode, "muted", x.StateRegionId))
             .ToList();
         _pageLabel = "1";
     }

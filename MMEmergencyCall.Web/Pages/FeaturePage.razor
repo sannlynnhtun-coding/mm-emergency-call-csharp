@@ -105,6 +105,23 @@
                                                     </div>
                                                 </div>
                                             }
+                                            else if (CanDeleteRows && row.Id.HasValue && !IsDeleted(row.Status))
+                                            {
+                                                <div class="grid justify-items-end gap-2">
+                                                    <span>@row.Detail</span>
+                                                    @if (_confirmActionKey == DeleteActionKey(row.Id.Value))
+                                                    {
+                                                        <div class="flex flex-wrap justify-end gap-2">
+                                                            <Button Variant="ghost" OnClick="CancelDelete" Disabled="@_actionId.HasValue">Cancel</Button>
+                                                            <Button Variant="danger" OnClick="@(() => DeleteRowAsync(row.Id.Value))" Disabled="@_actionId.HasValue">Confirm Delete</Button>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <Button Variant="danger" OnClick="@(() => AskDelete(row.Id.Value))" Disabled="@_actionId.HasValue">Delete</Button>
+                                                    }
+                                                </div>
+                                            }
                                             else
                                             {
                                                 @row.Detail
@@ -187,6 +204,7 @@
     private string? _actionError;
     private string _statusFilter = string.Empty;
     private string _roleFilter = string.Empty;
+    private string? _confirmActionKey;
     private int? _actionId;
     private bool _hasPagination;
     private bool _isEndOfPage = true;
@@ -195,6 +213,7 @@
     private bool _canGoNext => _hasPagination && !_isLoading && !_isEndOfPage && _pageNo < _pageCount;
     private bool CanUpdateRequests => Path == "/emergency-requests";
     private bool CanApproveServices => Path == "/service-approvals";
+    private bool CanDeleteRows => Path is "/emergency-services" or "/users";
     private bool ShowRoleFilter => Path == "/users";
     private bool ShowStatusFilter => Path is "/emergency-requests" or "/emergency-services" or "/users";
     private string[] StatusOptions => Path switch
@@ -237,6 +256,7 @@
         _isLoading = true;
         _error = null;
         _actionError = null;
+        _confirmActionKey = null;
         _rows = new();
         _loadedPath = Path;
 
@@ -250,7 +270,7 @@
             case "/emergency-services":
                 await LoadPagedAsync<EmergencyServiceListItem>(
                     WithQuery($"api/Admin/EmergencyService/pageNo/{_pageNo}/pageSize/{PageSize}", ("serviceStatus", _statusFilter)),
-                    x => new TableRow(TextOrFallback(x.ServiceName, $"Service #{x.ServiceId}"), $"{x.ServiceType} / {x.PhoneNumber}", TextOrFallback(x.ServiceStatus, "Unknown"), TextOrFallback(x.TownshipCode, "No township"), StatusVariant(x.ServiceStatus)));
+                    x => new TableRow(TextOrFallback(x.ServiceName, $"Service #{x.ServiceId}"), $"{x.ServiceType} / {x.PhoneNumber}", TextOrFallback(x.ServiceStatus, "Unknown"), TextOrFallback(x.TownshipCode, "No township"), StatusVariant(x.ServiceStatus), x.ServiceId));
                 break;
             case "/service-approvals":
                 await LoadPagedAsync<EmergencyServiceListItem>(
@@ -260,7 +280,7 @@
             case "/users":
                 await LoadPagedAsync<UserListItem>(
                     WithQuery($"api/admin/UserList/pageNo/{_pageNo}/pageSize/{PageSize}", ("role", _roleFilter), ("userStatus", _statusFilter)),
-                    x => new TableRow(TextOrFallback(x.Name, $"User #{x.UserId}"), $"{x.Email} / {x.Role}", TextOrFallback(x.UserStatus, "Unknown"), TextOrFallback(x.TownshipCode, "No township"), StatusVariant(x.UserStatus)));
+                    x => new TableRow(TextOrFallback(x.Name, $"User #{x.UserId}"), $"{x.Email} / {x.Role}", TextOrFallback(x.UserStatus, "Unknown"), TextOrFallback(x.TownshipCode, "No township"), StatusVariant(x.UserStatus), x.UserId));
                 break;
             case "/townships":
                 await LoadPagedAsync<TownshipListItem>(
@@ -290,6 +310,45 @@
     private async Task ApplyFiltersAsync()
     {
         _pageNo = 1;
+        await LoadAsync();
+    }
+
+    private void AskDelete(int id)
+    {
+        _actionError = null;
+        _confirmActionKey = DeleteActionKey(id);
+    }
+
+    private void CancelDelete()
+    {
+        _confirmActionKey = null;
+    }
+
+    private async Task DeleteRowAsync(int id)
+    {
+        _actionError = null;
+        _actionId = id;
+
+        var path = Path == "/users"
+            ? $"api/DeleteUser/{id}"
+            : $"api/admin/DeleteEmergencyService/{id}";
+
+        var result = await ApiClient.DeleteAdminAsync<bool>(path);
+
+        _actionId = null;
+        _confirmActionKey = null;
+
+        if (!result.IsSuccess)
+        {
+            _actionError = string.IsNullOrWhiteSpace(result.Message) ? "Unable to delete record." : result.Message;
+            return;
+        }
+
+        if (_rows.Count == 1 && _pageNo > 1)
+        {
+            _pageNo--;
+        }
+
         await LoadAsync();
     }
 
@@ -417,6 +476,16 @@
         return string.Equals(status, "Completed", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(status, "Closed", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(status, "Cancel", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsDeleted(string? status)
+    {
+        return string.Equals(status, "Deleted", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string DeleteActionKey(int id)
+    {
+        return $"{Path}:{id}";
     }
 
     private static string WithQuery(string path, params (string Name, string? Value)[] values)

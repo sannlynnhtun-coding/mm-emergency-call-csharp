@@ -83,6 +83,11 @@ public sealed class ApiClient
         return await SendAdminAsync<T>(HttpMethod.Patch, path, null, cancellationToken);
     }
 
+    public async Task<ApiResult<T>> DeleteAdminAsync<T>(string path, CancellationToken cancellationToken = default)
+    {
+        return await SendAdminAsync<T>(HttpMethod.Delete, path, null, cancellationToken);
+    }
+
     public async Task<ApiResult<T>> PutAdminAsJsonAsync<T>(string path, object body, CancellationToken cancellationToken = default)
     {
         return await SendAdminAsync<T>(HttpMethod.Put, path, JsonContent.Create(body, options: JsonOptions), cancellationToken);

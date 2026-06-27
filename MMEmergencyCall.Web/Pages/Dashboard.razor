@@ -43,6 +43,15 @@
             <SummaryCard Label="Monthly requests" Value="@_dashboard.RequestSummary.MonthlyRequest" />
         </div>
 
+        @if (_totalActive is not null)
+        {
+            <div class="grid gap-4 md:grid-cols-3">
+                <SummaryCard Label="Active users" Value="@_totalActive.Users" />
+                <SummaryCard Label="Service providers" Value="@_totalActive.ServiceProviders" />
+                <SummaryCard Label="Available services" Value="@_totalActive.Services" />
+            </div>
+        }
+
         <div class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
             <Card Class="p-5">
                 <div class="flex items-center justify-between gap-4">
@@ -161,6 +170,7 @@
 
 @code {
     private DashboardModel? _dashboard;
+    private TotalActiveModel? _totalActive;
     private bool _isLoading;
     private string? _error;
 
@@ -182,16 +192,23 @@
         _isLoading = true;
         _error = null;
 
-        var result = await ApiClient.GetDashboardAsync();
+        var dashboardTask = ApiClient.GetDashboardAsync();
+        var totalActiveTask = ApiClient.GetAdminAsync<TotalActiveModel>("api/admin/TotalActive");
+
+        var dashboardResult = await dashboardTask;
+        var totalActiveResult = await totalActiveTask;
 
         _isLoading = false;
-        if (result.IsSuccess && result.Data is not null)
+        if (dashboardResult.IsSuccess && dashboardResult.Data is not null && totalActiveResult.IsSuccess && totalActiveResult.Data is not null)
         {
-            _dashboard = result.Data;
+            _dashboard = dashboardResult.Data;
+            _totalActive = totalActiveResult.Data;
             return;
         }
 
-        _error = string.IsNullOrWhiteSpace(result.Message) ? "Unable to load dashboard." : result.Message;
+        _error = !dashboardResult.IsSuccess
+            ? (string.IsNullOrWhiteSpace(dashboardResult.Message) ? "Unable to load dashboard." : dashboardResult.Message)
+            : (string.IsNullOrWhiteSpace(totalActiveResult.Message) ? "Unable to load active totals." : totalActiveResult.Message);
     }
 
     private static int MaxCount(IEnumerable<int>? values)
@@ -208,5 +225,12 @@
     private static string TextOrFallback(string? value, string fallback)
     {
         return string.IsNullOrWhiteSpace(value) ? fallback : value;
+    }
+
+    private sealed class TotalActiveModel
+    {
+        public int Users { get; set; }
+        public int ServiceProviders { get; set; }
+        public int Services { get; set; }
     }
 }

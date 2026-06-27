@@ -90,8 +90,19 @@
                                             @if (CanApproveServices && row.Id.HasValue)
                                             {
                                                 <div class="flex flex-wrap justify-end gap-2">
-                                                    <Button OnClick='@(() => UpdateServiceStatusAsync(row.Id.Value, "Approved"))' Disabled="@(_actionId == row.Id)">Approve</Button>
-                                                    <Button Variant="outline" OnClick='@(() => UpdateServiceStatusAsync(row.Id.Value, "Rejected"))' Disabled="@(_actionId == row.Id)">Reject</Button>
+                                                    <Button OnClick='@(() => UpdateServiceStatusAsync(row.Id.Value, "Approved"))' Disabled="@_actionId.HasValue">Approve</Button>
+                                                    <Button Variant="outline" OnClick='@(() => UpdateServiceStatusAsync(row.Id.Value, "Rejected"))' Disabled="@_actionId.HasValue">Reject</Button>
+                                                </div>
+                                            }
+                                            else if (CanUpdateRequests && row.Id.HasValue && !IsFinalRequestStatus(row.Status))
+                                            {
+                                                <div class="grid justify-items-end gap-2">
+                                                    <span>@row.Detail</span>
+                                                    <div class="flex flex-wrap justify-end gap-2">
+                                                        <Button OnClick='@(() => UpdateRequestStatusAsync(row.Id.Value, "Completed"))' Disabled="@_actionId.HasValue">Complete</Button>
+                                                        <Button Variant="outline" OnClick='@(() => UpdateRequestStatusAsync(row.Id.Value, "Closed"))' Disabled="@_actionId.HasValue">Close</Button>
+                                                        <Button Variant="danger" OnClick='@(() => UpdateRequestStatusAsync(row.Id.Value, "Cancel"))' Disabled="@_actionId.HasValue">Cancel</Button>
+                                                    </div>
                                                 </div>
                                             }
                                             else
@@ -182,6 +193,7 @@
     private bool _isLoading;
     private bool _canGoPrevious => _hasPagination && !_isLoading && _pageNo > 1;
     private bool _canGoNext => _hasPagination && !_isLoading && !_isEndOfPage && _pageNo < _pageCount;
+    private bool CanUpdateRequests => Path == "/emergency-requests";
     private bool CanApproveServices => Path == "/service-approvals";
     private bool ShowRoleFilter => Path == "/users";
     private bool ShowStatusFilter => Path is "/emergency-requests" or "/emergency-services" or "/users";
@@ -233,7 +245,7 @@
             case "/emergency-requests":
                 await LoadPagedAsync<EmergencyRequestListItem>(
                     WithQuery($"api/admin/EmergencyRequestList/pageNo/{_pageNo}/pageSize/{PageSize}", ("status", _statusFilter)),
-                    x => new TableRow($"Request #{x.RequestId}", $"User {x.UserId} / Service {x.ServiceId}", x.Status, x.RequestTime.ToLocalTime().ToString("g"), StatusVariant(x.Status)));
+                    x => new TableRow($"Request #{x.RequestId}", $"User {x.UserId} / Service {x.ServiceId}", x.Status, x.RequestTime.ToLocalTime().ToString("g"), StatusVariant(x.Status), x.RequestId));
                 break;
             case "/emergency-services":
                 await LoadPagedAsync<EmergencyServiceListItem>(
@@ -300,6 +312,26 @@
         if (_rows.Count == 1 && _pageNo > 1)
         {
             _pageNo--;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task UpdateRequestStatusAsync(int requestId, string status)
+    {
+        _actionError = null;
+        _actionId = requestId;
+
+        var result = await ApiClient.PutAdminAsJsonAsync<bool>(
+            $"api/admin/CompleteCloseCancelEmergencyRequest/{requestId}",
+            new RequestStatusUpdate(status));
+
+        _actionId = null;
+
+        if (!result.IsSuccess)
+        {
+            _actionError = string.IsNullOrWhiteSpace(result.Message) ? "Unable to update request status." : result.Message;
+            return;
         }
 
         await LoadAsync();
@@ -374,9 +406,17 @@
     {
         return string.Equals(status, "Pending", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(status, "Rejected", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, "Cancel", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(status, "Deleted", StringComparison.OrdinalIgnoreCase)
             ? "danger"
             : "muted";
+    }
+
+    private static bool IsFinalRequestStatus(string? status)
+    {
+        return string.Equals(status, "Completed", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, "Closed", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, "Cancel", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string WithQuery(string path, params (string Name, string? Value)[] values)
@@ -392,4 +432,6 @@
     private sealed record FeaturePageInfo(string Group, string Title, string Description, string TableTitle, string TableSubtitle, string EmptyText);
 
     private sealed record TableRow(string Name, string Secondary, string Status, string Detail, string BadgeVariant, int? Id = null);
+
+    private sealed record RequestStatusUpdate(string Status);
 }

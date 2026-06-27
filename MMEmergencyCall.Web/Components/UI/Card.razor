@@ -1,0 +1,12 @@
+<section class="@ClassValue">
+    @ChildContent
+</section>
+
+@code {
+    [Parameter] public string Class { get; set; } = string.Empty;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string ClassValue => string.IsNullOrWhiteSpace(Class)
+        ? "rounded-md border border-neutral-200 bg-white text-neutral-950 shadow-sm"
+        : $"rounded-md border border-neutral-200 bg-white text-neutral-950 shadow-sm {Class}";
+}

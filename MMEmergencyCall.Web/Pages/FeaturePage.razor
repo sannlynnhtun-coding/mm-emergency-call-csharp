@@ -1,0 +1,225 @@
+@page "/emergency-requests"
+@page "/emergency-services"
+@page "/service-approvals"
+@page "/users"
+@page "/townships"
+@page "/state-regions"
+@inject ApiClient ApiClient
+@inject AuthState AuthState
+@inject NavigationManager Navigation
+
+<PageTitle>@Current.Title</PageTitle>
+
+<section class="space-y-6">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+            <Badge Variant="danger">@Current.Group</Badge>
+            <h1 class="mt-3 text-3xl font-semibold tracking-normal text-neutral-950">@Current.Title</h1>
+            <p class="mt-2 max-w-2xl text-sm leading-6 text-neutral-600">@Current.Description</p>
+        </div>
+        <Button Variant="outline" OnClick="LoadAsync" Disabled="@_isLoading">Refresh</Button>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="h-96 animate-pulse rounded-md bg-neutral-200"></div>
+    }
+    else if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <Alert Variant="danger">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <span>@_error</span>
+                <Button Variant="danger" OnClick="LoadAsync">Retry</Button>
+            </div>
+        </Alert>
+    }
+    else
+    {
+        <div class="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+            <Card Class="p-5">
+                <div class="flex items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-neutral-950">@Current.TableTitle</h2>
+                        <p class="mt-1 text-sm text-neutral-600">@Current.TableSubtitle</p>
+                    </div>
+                    <Badge Variant="muted">@_rows.Count rows</Badge>
+                </div>
+
+                <div class="mt-5 overflow-hidden rounded-md border border-neutral-200">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-neutral-50 text-xs uppercase text-neutral-500">
+                            <tr>
+                                <th class="px-3 py-3 font-medium">Name</th>
+                                <th class="px-3 py-3 font-medium">Status</th>
+                                <th class="px-3 py-3 text-right font-medium">Detail</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-neutral-200 bg-white">
+                            @if (_rows.Count == 0)
+                            {
+                                <tr>
+                                    <td class="px-3 py-8 text-center text-neutral-600" colspan="3">@Current.EmptyText</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var row in _rows)
+                                {
+                                    <tr>
+                                        <td class="px-3 py-3">
+                                            <p class="font-medium text-neutral-950">@row.Name</p>
+                                            <p class="text-xs text-neutral-500">@row.Secondary</p>
+                                        </td>
+                                        <td class="px-3 py-3">
+                                            <Badge Variant="@row.BadgeVariant">@row.Status</Badge>
+                                        </td>
+                                        <td class="px-3 py-3 text-right text-neutral-600">@row.Detail</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
+
+            <Card Class="p-5">
+                <h2 class="text-lg font-semibold text-neutral-950">Workspace</h2>
+                <div class="mt-5 grid gap-3">
+                    <div class="rounded-md border border-neutral-200 bg-neutral-50 p-4">
+                        <p class="text-sm font-medium text-neutral-950">Loaded rows</p>
+                        <p class="mt-1 text-2xl font-semibold tabular-nums text-red-700">@_rows.Count</p>
+                    </div>
+                    <div class="rounded-md border border-neutral-200 bg-neutral-50 p-4">
+                        <p class="text-sm font-medium text-neutral-950">Page</p>
+                        <p class="mt-1 text-2xl font-semibold tabular-nums text-red-700">@_pageLabel</p>
+                    </div>
+                </div>
+            </Card>
+        </div>
+    }
+</section>
+
+@code {
+    private FeaturePageInfo Current => Pages.GetValueOrDefault(Path, Pages["/emergency-requests"]);
+    private string Path => new Uri(Navigation.Uri).AbsolutePath.ToLowerInvariant();
+
+    private List<TableRow> _rows = new();
+    private string _pageLabel = "1";
+    private string? _loadedPath;
+    private string? _error;
+    private bool _isLoading;
+
+    private static readonly Dictionary<string, FeaturePageInfo> Pages = new()
+    {
+        ["/emergency-requests"] = new("Operations", "Emergency Requests", "Monitor incoming and historical emergency request records.", "Request queue", "Latest admin request records.", "No emergency request records loaded."),
+        ["/emergency-services"] = new("Services", "Emergency Services", "Manage service providers and emergency response coverage.", "Service directory", "Latest service provider records.", "No emergency service records loaded."),
+        ["/service-approvals"] = new("Services", "Service Approvals", "Review provider approval and rejection workflow state.", "Approval queue", "Pending service approval records.", "No service approvals loaded."),
+        ["/users"] = new("Users", "Users", "Review admin and service-provider account records.", "User directory", "Latest admin user records.", "No user records loaded."),
+        ["/townships"] = new("Locations", "Townships", "Maintain township records used across emergency services.", "Township list", "Latest township records.", "No township records loaded."),
+        ["/state-regions"] = new("Locations", "State Regions", "Maintain state and region records for service coverage.", "State region list", "Latest state and region records.", "No state region records loaded.")
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!AuthState.IsSignedIn)
+        {
+            Navigation.NavigateTo("/login", replace: true);
+            return;
+        }
+
+        if (_loadedPath != Path)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _error = null;
+        _rows = new();
+        _pageLabel = "1";
+        _loadedPath = Path;
+
+        switch (Path)
+        {
+            case "/emergency-requests":
+                await LoadPagedAsync<EmergencyRequestListItem>(
+                    "api/admin/EmergencyRequestList/pageNo/1/pageSize/10",
+                    x => new TableRow($"Request #{x.RequestId}", $"User {x.UserId} / Service {x.ServiceId}", x.Status, x.RequestTime.ToLocalTime().ToString("g"), StatusVariant(x.Status)));
+                break;
+            case "/emergency-services":
+                await LoadPagedAsync<EmergencyServiceListItem>(
+                    "api/Admin/EmergencyService/pageNo/1/pageSize/10",
+                    x => new TableRow(TextOrFallback(x.ServiceName, $"Service #{x.ServiceId}"), $"{x.ServiceType} / {x.PhoneNumber}", TextOrFallback(x.ServiceStatus, "Unknown"), TextOrFallback(x.TownshipCode, "No township"), StatusVariant(x.ServiceStatus)));
+                break;
+            case "/service-approvals":
+                await LoadPagedAsync<EmergencyServiceListItem>(
+                    "api/Admin/EmergencyService/pageNo/1/pageSize/10?serviceStatus=Pending",
+                    x => new TableRow(TextOrFallback(x.ServiceName, $"Service #{x.ServiceId}"), $"{x.ServiceType} / {x.PhoneNumber}", TextOrFallback(x.ServiceStatus, "Pending"), TextOrFallback(x.TownshipCode, "No township"), StatusVariant(x.ServiceStatus)));
+                break;
+            case "/users":
+                await LoadPagedAsync<UserListItem>(
+                    "api/admin/UserList/pageNo/1/pageSize/10",
+                    x => new TableRow(TextOrFallback(x.Name, $"User #{x.UserId}"), $"{x.Email} / {x.Role}", TextOrFallback(x.UserStatus, "Unknown"), TextOrFallback(x.TownshipCode, "No township"), StatusVariant(x.UserStatus)));
+                break;
+            case "/townships":
+                await LoadPagedAsync<TownshipListItem>(
+                    "api/Township/pageNo/1/pageSize/10",
+                    x => new TableRow(TextOrFallback(x.TownshipNameEn, x.TownshipCode), x.TownshipNameMm, x.StateRegionCode, x.TownshipCode, "muted"));
+                break;
+            case "/state-regions":
+                await LoadStateRegionsAsync();
+                break;
+        }
+
+        _isLoading = false;
+    }
+
+    private async Task LoadPagedAsync<T>(string path, Func<T, TableRow> map)
+    {
+        var result = await ApiClient.GetAdminAsync<PagedList<T>>(path);
+        if (!result.IsSuccess || result.Data is null)
+        {
+            _error = string.IsNullOrWhiteSpace(result.Message) ? "Unable to load records." : result.Message;
+            return;
+        }
+
+        _rows = result.Data.Data.Select(map).ToList();
+        _pageLabel = $"{result.Data.PageNo} / {Math.Max(result.Data.PageCount, 1)}";
+    }
+
+    private async Task LoadStateRegionsAsync()
+    {
+        var result = await ApiClient.GetAdminAsync<List<StateRegionListItem>>("api/StateRegion");
+        if (!result.IsSuccess || result.Data is null)
+        {
+            _error = string.IsNullOrWhiteSpace(result.Message) ? "Unable to load records." : result.Message;
+            return;
+        }
+
+        _rows = result.Data
+            .Take(10)
+            .Select(x => new TableRow(TextOrFallback(x.StateRegionNameEn, x.StateRegionCode), TextOrFallback(x.StateRegionNameMm, "No Myanmar name"), "Active", x.StateRegionCode, "muted"))
+            .ToList();
+        _pageLabel = "1";
+    }
+
+    private static string TextOrFallback(string? value, string fallback)
+    {
+        return string.IsNullOrWhiteSpace(value) ? fallback : value;
+    }
+
+    private static string StatusVariant(string? status)
+    {
+        return string.Equals(status, "Pending", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, "Rejected", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, "Deleted", StringComparison.OrdinalIgnoreCase)
+            ? "danger"
+            : "muted";
+    }
+
+    private sealed record FeaturePageInfo(string Group, string Title, string Description, string TableTitle, string TableSubtitle, string EmptyText);
+
+    private sealed record TableRow(string Name, string Secondary, string Status, string Detail, string BadgeVariant);
+}

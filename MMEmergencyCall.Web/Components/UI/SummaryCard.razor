@@ -1,0 +1,14 @@
+<Card Class="p-5">
+    <div class="flex items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-medium text-neutral-600">@Label</p>
+            <p class="mt-3 text-4xl font-semibold tabular-nums text-neutral-950">@Value</p>
+        </div>
+        <span class="rounded-md bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 ring-1 ring-red-200">Requests</span>
+    </div>
+</Card>
+
+@code {
+    [Parameter] public string Label { get; set; } = string.Empty;
+    [Parameter] public int Value { get; set; }
+}

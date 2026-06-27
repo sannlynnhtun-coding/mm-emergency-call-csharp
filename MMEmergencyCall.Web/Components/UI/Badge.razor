@@ -1,0 +1,15 @@
+<span class="@ClassValue">
+    @ChildContent
+</span>
+
+@code {
+    [Parameter] public string Variant { get; set; } = "default";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string ClassValue => Variant switch
+    {
+        "danger" => "inline-flex min-h-7 items-center rounded-md bg-red-50 px-2.5 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-200",
+        "muted" => "inline-flex min-h-7 items-center rounded-md bg-neutral-100 px-2.5 text-xs font-medium text-neutral-700 ring-1 ring-inset ring-neutral-200",
+        _ => "inline-flex min-h-7 items-center rounded-md bg-red-600 px-2.5 text-xs font-medium text-white"
+    };
+}

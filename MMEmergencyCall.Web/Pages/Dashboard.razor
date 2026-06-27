@@ -1,0 +1,212 @@
+@page "/dashboard"
+@inject ApiClient ApiClient
+@inject AuthState AuthState
+@inject NavigationManager Navigation
+
+<PageTitle>Admin dashboard</PageTitle>
+
+<section class="space-y-6">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+            <Badge Variant="danger">Dashboard</Badge>
+            <h1 class="mt-3 text-3xl font-semibold tracking-normal text-neutral-950">Emergency operations</h1>
+            <p class="mt-2 max-w-2xl text-sm leading-6 text-neutral-600">
+                Daily, weekly, and monthly request volume with the busiest townships, users, and service providers.
+            </p>
+        </div>
+        <Button Variant="outline" OnClick="LoadDashboardAsync" Disabled="@_isLoading">Refresh</Button>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="grid gap-4 md:grid-cols-3">
+            <div class="h-32 animate-pulse rounded-md bg-neutral-200"></div>
+            <div class="h-32 animate-pulse rounded-md bg-neutral-200"></div>
+            <div class="h-32 animate-pulse rounded-md bg-neutral-200"></div>
+        </div>
+        <div class="h-96 animate-pulse rounded-md bg-neutral-200"></div>
+    }
+    else if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <Alert Variant="danger">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <span>@_error</span>
+                <Button Variant="danger" OnClick="LoadDashboardAsync">Retry</Button>
+            </div>
+        </Alert>
+    }
+    else if (_dashboard is not null)
+    {
+        <div class="grid gap-4 md:grid-cols-3">
+            <SummaryCard Label="Daily requests" Value="@_dashboard.RequestSummary.DailyRequest" />
+            <SummaryCard Label="Weekly requests" Value="@_dashboard.RequestSummary.WeeklyRequest" />
+            <SummaryCard Label="Monthly requests" Value="@_dashboard.RequestSummary.MonthlyRequest" />
+        </div>
+
+        <div class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+            <Card Class="p-5">
+                <div class="flex items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-neutral-950">Township demand</h2>
+                        <p class="mt-1 text-sm text-neutral-600">Top service requests by township.</p>
+                    </div>
+                    <Badge Variant="muted">@_dashboard.TopTenServicePerTownship.Count rows</Badge>
+                </div>
+
+                <div class="mt-5 space-y-3">
+                    @if (_dashboard.TopTenServicePerTownship.Count == 0)
+                    {
+                        <p class="rounded-md bg-neutral-50 p-4 text-sm text-neutral-600">No township request data.</p>
+                    }
+                    else
+                    {
+                        @foreach (var row in _dashboard.TopTenServicePerTownship.Take(10))
+                        {
+                            <div class="rounded-md border border-neutral-200 p-3">
+                                <div class="flex items-center justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <p class="truncate text-sm font-medium text-neutral-950">@TextOrFallback(row.TownshipNameEn, row.TownshipCode)</p>
+                                        <p class="text-xs text-neutral-500">@TextOrFallback(row.TownshipNameMM, row.TownshipCode)</p>
+                                    </div>
+                                    <span class="text-sm font-semibold text-red-700">@row.Count</span>
+                                </div>
+                                <div class="mt-3 h-2 rounded-full bg-neutral-100">
+                                    <div class="h-2 rounded-full bg-red-600" style="@BarWidth(row.Count, TownshipMax)"></div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </Card>
+
+            <Card Class="p-5">
+                <div class="flex items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-neutral-950">Service activity</h2>
+                        <p class="mt-1 text-sm text-neutral-600">Most requested providers.</p>
+                    </div>
+                    <Badge Variant="muted">@_dashboard.ServiceProviderActivity.Count rows</Badge>
+                </div>
+
+                <div class="mt-5 overflow-hidden rounded-md border border-neutral-200">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-neutral-50 text-xs uppercase text-neutral-500">
+                            <tr>
+                                <th class="px-3 py-3 font-medium">Service</th>
+                                <th class="px-3 py-3 font-medium">Type</th>
+                                <th class="px-3 py-3 text-right font-medium">Count</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-neutral-200 bg-white">
+                            @if (_dashboard.ServiceProviderActivity.Count == 0)
+                            {
+                                <tr>
+                                    <td class="px-3 py-4 text-neutral-600" colspan="3">No provider activity data.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var row in _dashboard.ServiceProviderActivity.Take(8))
+                                {
+                                    <tr>
+                                        <td class="px-3 py-3">
+                                            <p class="font-medium text-neutral-950">@TextOrFallback(row.ServiceName, $"Service #{row.ServiceId}")</p>
+                                            <p class="text-xs text-neutral-500">@TextOrFallback(row.PhoneNumber, "No phone")</p>
+                                        </td>
+                                        <td class="px-3 py-3 text-neutral-600">@TextOrFallback(row.ServiceType, "Unknown")</td>
+                                        <td class="px-3 py-3 text-right font-semibold text-red-700">@row.Count</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
+        </div>
+
+        <Card Class="p-5">
+            <div class="flex items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-lg font-semibold text-neutral-950">Top request users</h2>
+                    <p class="mt-1 text-sm text-neutral-600">Users creating the most emergency requests.</p>
+                </div>
+                <Badge Variant="muted">@_dashboard.TopTenRequestPerUser.Count rows</Badge>
+            </div>
+
+            <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                @if (_dashboard.TopTenRequestPerUser.Count == 0)
+                {
+                    <p class="rounded-md bg-neutral-50 p-4 text-sm text-neutral-600">No user request data.</p>
+                }
+                else
+                {
+                    @foreach (var row in _dashboard.TopTenRequestPerUser.Take(9))
+                    {
+                        <div class="rounded-md border border-neutral-200 p-4">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <p class="truncate text-sm font-semibold text-neutral-950">@TextOrFallback(row.UserName, $"User #{row.UserId}")</p>
+                                    <p class="truncate text-xs text-neutral-500">@TextOrFallback(row.UserEmail, "No email")</p>
+                                </div>
+                                <Badge Variant="danger">@row.Count</Badge>
+                            </div>
+                            <p class="mt-3 text-xs leading-5 text-neutral-600">@TextOrFallback(row.UserPhoneNumber, "No phone")</p>
+                        </div>
+                    }
+                }
+            </div>
+        </Card>
+    }
+</section>
+
+@code {
+    private DashboardModel? _dashboard;
+    private bool _isLoading;
+    private string? _error;
+
+    private int TownshipMax => MaxCount(_dashboard?.TopTenServicePerTownship.Select(x => x.Count));
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AuthState.IsSignedIn)
+        {
+            Navigation.NavigateTo("/login", replace: true);
+            return;
+        }
+
+        await LoadDashboardAsync();
+    }
+
+    private async Task LoadDashboardAsync()
+    {
+        _isLoading = true;
+        _error = null;
+
+        var result = await ApiClient.GetDashboardAsync();
+
+        _isLoading = false;
+        if (result.IsSuccess && result.Data is not null)
+        {
+            _dashboard = result.Data;
+            return;
+        }
+
+        _error = string.IsNullOrWhiteSpace(result.Message) ? "Unable to load dashboard." : result.Message;
+    }
+
+    private static int MaxCount(IEnumerable<int>? values)
+    {
+        return values?.DefaultIfEmpty(1).Max() ?? 1;
+    }
+
+    private static string BarWidth(int value, int max)
+    {
+        var width = Math.Clamp(value * 100 / Math.Max(max, 1), 8, 100);
+        return $"width: {width}%";
+    }
+
+    private static string TextOrFallback(string? value, string fallback)
+    {
+        return string.IsNullOrWhiteSpace(value) ? fallback : value;
+    }
+}

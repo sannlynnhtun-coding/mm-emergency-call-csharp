@@ -1,0 +1,87 @@
+@import "tailwindcss" source("../");
+
+@theme inline {
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --color-background: hsl(0 0% 100%);
+  --color-foreground: hsl(240 10% 3.9%);
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(240 10% 3.9%);
+  --color-muted: hsl(240 4.8% 95.9%);
+  --color-muted-foreground: hsl(240 3.8% 46.1%);
+  --color-border: hsl(240 5.9% 90%);
+  --color-primary: hsl(0 72.2% 50.6%);
+  --color-primary-foreground: hsl(0 0% 98%);
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    background: hsl(240 10% 3.9%);
+    font-family: var(--font-sans);
+    color: var(--color-foreground);
+  }
+
+  body {
+    min-height: 100dvh;
+    margin: 0;
+    background: hsl(240 5% 96%);
+  }
+
+  button,
+  input {
+    font: inherit;
+  }
+}
+
+@layer components {
+  .loading-shell {
+    display: grid;
+    min-height: 100dvh;
+    place-items: center;
+    gap: 0.75rem;
+    background: hsl(240 10% 3.9%);
+    color: white;
+  }
+
+  .loading-mark {
+    display: grid;
+    width: 3rem;
+    height: 3rem;
+    place-items: center;
+    border-radius: 0.5rem;
+    background: hsl(0 72.2% 50.6%);
+    font-weight: 800;
+  }
+
+  #blazor-error-ui {
+    display: none;
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 1000;
+    max-width: min(28rem, calc(100vw - 2rem));
+    border-radius: 0.5rem;
+    border: 1px solid hsl(0 72.2% 50.6%);
+    background: white;
+    padding: 0.875rem 1rem;
+    color: hsl(240 10% 3.9%);
+    box-shadow: 0 18px 50px rgb(15 23 42 / 18%);
+  }
+
+  #blazor-error-ui .reload {
+    margin-left: 0.5rem;
+    color: hsl(0 72.2% 50.6%);
+    font-weight: 600;
+  }
+
+  #blazor-error-ui .dismiss {
+    margin-left: 0.75rem;
+    cursor: pointer;
+    color: hsl(240 3.8% 46.1%);
+  }
+}

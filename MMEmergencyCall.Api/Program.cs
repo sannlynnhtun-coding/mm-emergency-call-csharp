@@ -5,6 +5,7 @@ using MMEmergencyCall.Domain.Client.Features.Profile;
 using MMEmergencyCall.Shared;
 
 var builder = WebApplication.CreateBuilder(args);
+const string WasmDevCorsPolicy = "WasmDevClient";
 
 // Add services to the container.
 
@@ -23,6 +24,16 @@ builder.Services.AddControllers()
 	});
 
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddCors(options =>
+{
+	options.AddPolicy(WasmDevCorsPolicy, policy =>
+	{
+		policy
+			.WithOrigins("https://localhost:7180", "http://localhost:5180")
+			.AllowAnyHeader()
+			.AllowAnyMethod();
+	});
+});
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
@@ -70,6 +81,8 @@ app.UseExceptionHandler(errorApp =>
 });
 
 app.UseHttpsRedirection();
+
+app.UseCors(WasmDevCorsPolicy);
 
 app.UseAuthorization();
 

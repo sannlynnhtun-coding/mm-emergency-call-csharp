@@ -1,0 +1,106 @@
+@page "/login"
+@inject ApiClient ApiClient
+@inject AuthState AuthState
+@inject NavigationManager Navigation
+
+<PageTitle>Admin sign in</PageTitle>
+
+<main class="min-h-dvh bg-neutral-950 px-4 py-8 text-white">
+    <section class="mx-auto grid min-h-[calc(100dvh-4rem)] max-w-6xl items-center gap-8 lg:grid-cols-[1fr_420px]">
+        <div class="max-w-2xl">
+            <Badge>Admin</Badge>
+            <h1 class="mt-6 text-4xl font-semibold leading-tight sm:text-5xl">MM Emergency Call</h1>
+            <p class="mt-4 max-w-xl text-base leading-7 text-neutral-300">
+                Monitor emergency demand, township activity, and service-provider workload from one focused console.
+            </p>
+            <div class="mt-8 grid gap-3 sm:grid-cols-3">
+                <div class="rounded-md border border-white/10 bg-white/5 p-4">
+                    <p class="text-sm text-neutral-400">Response</p>
+                    <p class="mt-2 text-2xl font-semibold text-white">Live</p>
+                </div>
+                <div class="rounded-md border border-white/10 bg-white/5 p-4">
+                    <p class="text-sm text-neutral-400">Scope</p>
+                    <p class="mt-2 text-2xl font-semibold text-white">Admin</p>
+                </div>
+                <div class="rounded-md border border-white/10 bg-white/5 p-4">
+                    <p class="text-sm text-neutral-400">Session</p>
+                    <p class="mt-2 text-2xl font-semibold text-white">5 min</p>
+                </div>
+            </div>
+        </div>
+
+        <Card Class="p-6 sm:p-8">
+            <div>
+                <Badge Variant="danger">Secure access</Badge>
+                <h2 class="mt-4 text-2xl font-semibold text-neutral-950">Sign in</h2>
+                <p class="mt-2 text-sm leading-6 text-neutral-600">Use an active admin account.</p>
+            </div>
+
+            <form class="mt-6 space-y-4" @onsubmit="SignInAsync" @onsubmit:preventDefault="true">
+                <Input Id="email"
+                       Label="Email"
+                       Type="email"
+                       Autocomplete="email"
+                       Placeholder="admin@example.com"
+                       Required="true"
+                       Disabled="@_isLoading"
+                       @bind-Value="_request.Email" />
+
+                <Input Id="password"
+                       Label="Password"
+                       Type="password"
+                       Autocomplete="current-password"
+                       Placeholder="Password"
+                       Required="true"
+                       Disabled="@_isLoading"
+                       @bind-Value="_request.Password" />
+
+                @if (!string.IsNullOrWhiteSpace(_error))
+                {
+                    <Alert Variant="danger">@_error</Alert>
+                }
+
+                <Button Type="submit" Disabled="@_isLoading">
+                    @(_isLoading ? "Signing in..." : "Sign in")
+                </Button>
+            </form>
+        </Card>
+    </section>
+</main>
+
+@code {
+    private readonly AdminSigninRequest _request = new();
+    private bool _isLoading;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        if (AuthState.IsSignedIn)
+        {
+            Navigation.NavigateTo("/dashboard", replace: true);
+        }
+    }
+
+    private async Task SignInAsync()
+    {
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(_request.Email) || string.IsNullOrWhiteSpace(_request.Password))
+        {
+            _error = "Email and password are required.";
+            return;
+        }
+
+        _isLoading = true;
+        var result = await ApiClient.SignInAsync(_request);
+        _isLoading = false;
+
+        if (result.IsSuccess && result.Data is not null && !string.IsNullOrWhiteSpace(result.Data.Token))
+        {
+            Navigation.NavigateTo("/dashboard", replace: true);
+            return;
+        }
+
+        _error = string.IsNullOrWhiteSpace(result.Message) ? "Unable to sign in." : result.Message;
+    }
+}

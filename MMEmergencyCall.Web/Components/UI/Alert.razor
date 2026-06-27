@@ -1,0 +1,14 @@
+<div class="@ClassValue" role="alert">
+    @ChildContent
+</div>
+
+@code {
+    [Parameter] public string Variant { get; set; } = "default";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string ClassValue => Variant switch
+    {
+        "danger" => "rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800",
+        _ => "rounded-md border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700"
+    };
+}

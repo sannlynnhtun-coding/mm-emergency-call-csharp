@@ -24,6 +24,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MMEmergencyCall.Domain.Clie
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MMEmergencyCall.ResultPattern.Tests", "MMEmergencyCall.ResultPattern.Tests\MMEmergencyCall.ResultPattern.Tests.csproj", "{4E984B0D-8171-49D9-9A94-66BC4F02C7B5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MMEmergencyCall.Web", "MMEmergencyCall.Web\MMEmergencyCall.Web.csproj", "{62923797-AFE1-471B-84C1-D5049C62D015}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -118,6 +120,18 @@ Global
 		{4E984B0D-8171-49D9-9A94-66BC4F02C7B5}.Release|x64.Build.0 = Release|Any CPU
 		{4E984B0D-8171-49D9-9A94-66BC4F02C7B5}.Release|x86.ActiveCfg = Release|Any CPU
 		{4E984B0D-8171-49D9-9A94-66BC4F02C7B5}.Release|x86.Build.0 = Release|Any CPU
+		{62923797-AFE1-471B-84C1-D5049C62D015}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{62923797-AFE1-471B-84C1-D5049C62D015}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{62923797-AFE1-471B-84C1-D5049C62D015}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{62923797-AFE1-471B-84C1-D5049C62D015}.Debug|x64.Build.0 = Debug|Any CPU
+		{62923797-AFE1-471B-84C1-D5049C62D015}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{62923797-AFE1-471B-84C1-D5049C62D015}.Debug|x86.Build.0 = Debug|Any CPU
+		{62923797-AFE1-471B-84C1-D5049C62D015}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{62923797-AFE1-471B-84C1-D5049C62D015}.Release|Any CPU.Build.0 = Release|Any CPU
+		{62923797-AFE1-471B-84C1-D5049C62D015}.Release|x64.ActiveCfg = Release|Any CPU
+		{62923797-AFE1-471B-84C1-D5049C62D015}.Release|x64.Build.0 = Release|Any CPU
+		{62923797-AFE1-471B-84C1-D5049C62D015}.Release|x86.ActiveCfg = Release|Any CPU
+		{62923797-AFE1-471B-84C1-D5049C62D015}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

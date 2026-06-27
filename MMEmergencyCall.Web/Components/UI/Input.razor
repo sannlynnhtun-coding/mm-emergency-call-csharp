@@ -1,0 +1,47 @@
+<div class="space-y-2">
+    @if (!string.IsNullOrWhiteSpace(Label))
+    {
+        <label class="block text-sm font-medium text-neutral-800" for="@Id">@Label</label>
+    }
+    <input id="@Id"
+           type="@Type"
+           value="@Value"
+           placeholder="@Placeholder"
+           autocomplete="@Autocomplete"
+           required="@Required"
+           disabled="@Disabled"
+           aria-invalid="@HasError"
+           aria-describedby="@ErrorId"
+           class="@ClassValue"
+           @oninput="OnInput"
+           @attributes="AdditionalAttributes" />
+    @if (HasError)
+    {
+        <p id="@ErrorId" class="text-sm text-red-700">@Error</p>
+    }
+</div>
+
+@code {
+    [Parameter] public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    [Parameter] public string Label { get; set; } = string.Empty;
+    [Parameter] public string Type { get; set; } = "text";
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = string.Empty;
+    [Parameter] public string Autocomplete { get; set; } = "off";
+    [Parameter] public bool Required { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string Error { get; set; } = string.Empty;
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private bool HasError => !string.IsNullOrWhiteSpace(Error);
+    private string ErrorId => $"{Id}-error";
+    private string ClassValue => HasError
+        ? "min-h-11 w-full rounded-md border border-red-500 bg-white px-3 text-sm text-neutral-950 shadow-sm outline-none transition placeholder:text-neutral-400 focus:ring-2 focus:ring-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+        : "min-h-11 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-950 shadow-sm outline-none transition placeholder:text-neutral-400 focus:border-red-500 focus:ring-2 focus:ring-red-500 disabled:cursor-not-allowed disabled:opacity-50";
+
+    private async Task OnInput(ChangeEventArgs args)
+    {
+        await ValueChanged.InvokeAsync(args.Value?.ToString() ?? string.Empty);
+    }
+}

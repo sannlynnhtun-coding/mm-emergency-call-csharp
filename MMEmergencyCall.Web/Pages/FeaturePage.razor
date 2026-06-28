@@ -131,6 +131,14 @@
                                                             @if (CanManageServices && row.Service is not null)
                                                             {
                                                                 <Button Variant="outline" OnClick="@(() => StartServiceEdit(row))" Disabled="@(_actionId.HasValue || _isSaving)">Edit</Button>
+                                                                @if (!IsApproved(row.Status))
+                                                                {
+                                                                    <Button OnClick='@(() => UpdateServiceStatusAsync(row.Id.Value, "Approved"))' Disabled="@_actionId.HasValue">Approve</Button>
+                                                                }
+                                                                @if (!IsRejected(row.Status))
+                                                                {
+                                                                    <Button Variant="outline" OnClick='@(() => UpdateServiceStatusAsync(row.Id.Value, "Rejected"))' Disabled="@_actionId.HasValue">Reject</Button>
+                                                                }
                                                             }
                                                             @if (CanUpdateUsers && row.User is not null)
                                                             {
@@ -975,6 +983,7 @@
             _pageNo--;
         }
 
+        _actionMessage = $"Emergency service {serviceStatus.ToLowerInvariant()}.";
         await LoadAsync();
     }
 
@@ -1146,6 +1155,16 @@
     private static bool IsDeactivated(string? status)
     {
         return string.Equals(status, "Deactivated", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsApproved(string? status)
+    {
+        return string.Equals(status, "Approved", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsRejected(string? status)
+    {
+        return string.Equals(status, "Rejected", StringComparison.OrdinalIgnoreCase);
     }
 
     private string DeleteActionKey(int id)

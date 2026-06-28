@@ -133,6 +133,7 @@
                                                             }
                                                             @if (CanUpdateUsers && row.User is not null)
                                                             {
+                                                                <Button Variant="ghost" OnClick="@(() => LoadUserDetailAsync(row.Id.Value))" Disabled="@(_actionId.HasValue || _isUserDetailLoading)">Details</Button>
                                                                 <Button Variant="outline" OnClick="@(() => StartUserEdit(row))" Disabled="@(_actionId.HasValue || _isSaving)">Edit</Button>
                                                                 @if (!IsActivated(row.Status))
                                                                 {
@@ -231,6 +232,25 @@
                                 </div>
                             </div>
                         </form>
+                    }
+                    @if (CanUpdateUsers && _userDetail is not null)
+                    {
+                        <div class="rounded-md border border-neutral-200 bg-neutral-50 p-4">
+                            <div class="flex items-center justify-between gap-3">
+                                <p class="text-sm font-medium text-neutral-950">@_userDetail.Name</p>
+                                <Badge Variant="@StatusVariant(_userDetail.UserStatus)">@_userDetail.UserStatus</Badge>
+                            </div>
+                            <div class="mt-3 grid gap-2 text-sm text-neutral-600">
+                                <p>@_userDetail.Email</p>
+                                <p>@_userDetail.PhoneNumber</p>
+                                <p>@_userDetail.Address</p>
+                                <p>@_userDetail.Role / @TextOrFallback(_userDetail.TownshipCode, "No township")</p>
+                                @if (!string.IsNullOrWhiteSpace(_userDetail.EmergencyType) || !string.IsNullOrWhiteSpace(_userDetail.EmergencyDetails))
+                                {
+                                    <p>@TextOrFallback(_userDetail.EmergencyType, "No emergency type") / @TextOrFallback(_userDetail.EmergencyDetails, "No details")</p>
+                                }
+                            </div>
+                        </div>
                     }
                     @if (CanManageServices)
                     {
@@ -339,6 +359,7 @@
     private string _userRole = "Normal User";
     private string _userStatus = "Pending";
     private int? _userEditId;
+    private UserDetail? _userDetail;
     private string _serviceGroup = string.Empty;
     private string _serviceType = string.Empty;
     private string _serviceName = string.Empty;
@@ -353,6 +374,7 @@
     private bool _isEndOfPage = true;
     private bool _isLoading;
     private bool _isSaving;
+    private bool _isUserDetailLoading;
     private bool _canGoPrevious => _hasPagination && !_isLoading && _pageNo > 1;
     private bool _canGoNext => _hasPagination && !_isLoading && !_isEndOfPage && _pageNo < _pageCount;
     private bool CanUpdateRequests => Path == "/emergency-requests";
@@ -399,6 +421,7 @@
             ResetCreateForm();
             ResetEditForm();
             ResetUserForm();
+            ResetUserDetail();
             ResetServiceForm();
             await LoadAsync();
         }
@@ -528,7 +551,6 @@
 
         if (string.IsNullOrWhiteSpace(_userName) ||
             string.IsNullOrWhiteSpace(_userEmail) ||
-            string.IsNullOrWhiteSpace(_userPassword) ||
             string.IsNullOrWhiteSpace(_userPhoneNumber) ||
             string.IsNullOrWhiteSpace(_userAddress) ||
             string.IsNullOrWhiteSpace(_userTownshipCode) ||
@@ -655,8 +677,31 @@
             _userStatus = userStatus;
         }
 
+        if (_userDetail?.UserId == row.Id.Value)
+        {
+            _userDetail = _userDetail with { UserStatus = userStatus };
+        }
+
         _actionMessage = $"User {userStatus.ToLowerInvariant()}.";
         await LoadAsync();
+    }
+
+    private async Task LoadUserDetailAsync(int id)
+    {
+        _actionError = null;
+        _actionMessage = null;
+        _isUserDetailLoading = true;
+
+        var result = await ApiClient.GetAdminAsync<UserDetail>($"api/admin/UserById/{id}");
+
+        _isUserDetailLoading = false;
+        if (result.IsSuccess && result.Data is not null)
+        {
+            _userDetail = result.Data;
+            return;
+        }
+
+        _actionError = string.IsNullOrWhiteSpace(result.Message) ? "Unable to load user details." : result.Message;
     }
 
     private void StartEdit(TableRow row)
@@ -833,9 +878,10 @@
             ResetEditForm();
         }
 
-        if (Path == "/users" && _userEditId == id)
+        if (Path == "/users" && (_userEditId == id || _userDetail?.UserId == id))
         {
             ResetUserForm();
+            ResetUserDetail();
         }
 
         if (Path == "/emergency-services" && _serviceEditId == id)
@@ -987,6 +1033,11 @@
         _userStatus = "Pending";
     }
 
+    private void ResetUserDetail()
+    {
+        _userDetail = null;
+    }
+
     private void ResetServiceForm()
     {
         _serviceEditId = null;
@@ -1053,6 +1104,8 @@
     private sealed record RequestStatusUpdate(string Status);
 
     private sealed record UserRow(string Name, string Email, string PhoneNumber, string Address, string? EmergencyType, string? EmergencyDetails, string TownshipCode, string Role);
+
+    private sealed record UserDetail(int UserId, string Name, string Email, string PhoneNumber, string Address, string? EmergencyType, string? EmergencyDetails, string TownshipCode, string Role, string UserStatus);
 
     private sealed record UserCreateRequest(string Name, string Email, string Password, string PhoneNumber, string Address, string? EmergencyType, string? EmergencyDetails, string TownshipCode, string Role);
 

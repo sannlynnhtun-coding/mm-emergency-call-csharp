@@ -202,13 +202,61 @@
                                     <p class="truncate text-sm font-semibold text-neutral-950">@TextOrFallback(row.UserName, $"User #{row.UserId}")</p>
                                     <p class="truncate text-xs text-neutral-500">@TextOrFallback(row.UserEmail, "No email")</p>
                                 </div>
-                                <Badge Variant="danger">@row.Count</Badge>
+                                <div class="flex items-center gap-2">
+                                    <Badge Variant="danger">@row.Count</Badge>
+                                    <Button Variant="ghost" OnClick="@(() => LoadUserRequestsAsync(row))" Disabled="@_isUserRequestsLoading">View</Button>
+                                </div>
                             </div>
                             <p class="mt-3 text-xs leading-5 text-neutral-600">@TextOrFallback(row.UserPhoneNumber, "No phone")</p>
                         </div>
                     }
                 }
             </div>
+
+            @if (!string.IsNullOrWhiteSpace(_userRequestsError))
+            {
+                <div class="mt-5">
+                    <Alert Variant="danger">@_userRequestsError</Alert>
+                </div>
+            }
+            else if (_selectedUserId.HasValue)
+            {
+                <div class="mt-5 rounded-md border border-neutral-200 bg-neutral-50 p-4">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <h3 class="text-sm font-semibold text-neutral-950">@_selectedUserName</h3>
+                            <p class="mt-1 text-xs text-neutral-500">Latest emergency requests from this user.</p>
+                        </div>
+                        <Badge Variant="muted">@(_isUserRequestsLoading ? "Loading" : $"{_userRequests.Count} rows")</Badge>
+                    </div>
+
+                    @if (!_isUserRequestsLoading)
+                    {
+                        <div class="mt-4 space-y-2">
+                            @if (_userRequests.Count == 0)
+                            {
+                                <p class="text-sm text-neutral-600">No request data.</p>
+                            }
+                            else
+                            {
+                                @foreach (var request in _userRequests)
+                                {
+                                    <div class="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-sm">
+                                        <div class="min-w-0">
+                                            <p class="truncate font-medium text-neutral-950">Request #@request.RequestId</p>
+                                            <p class="truncate text-xs text-neutral-500">Service @request.ServiceId / @TextOrFallback(request.TownshipCode, "No township")</p>
+                                        </div>
+                                        <div class="text-right">
+                                            <Badge Variant="@StatusVariant(request.Status)">@TextOrFallback(request.Status, "Unknown")</Badge>
+                                            <p class="mt-1 text-xs text-neutral-500">@request.RequestTime.ToLocalTime().ToString("g")</p>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    }
+                </div>
+            }
         </Card>
     }
 </section>
@@ -220,8 +268,13 @@
     private string? _selectedTownshipCode;
     private string? _selectedTownshipName;
     private string? _townshipServicesError;
+    private List<UserTopRequestModel> _userRequests = new();
+    private int? _selectedUserId;
+    private string? _selectedUserName;
+    private string? _userRequestsError;
     private bool _isLoading;
     private bool _isTownshipServicesLoading;
+    private bool _isUserRequestsLoading;
     private string? _error;
 
     private int TownshipMax => MaxCount(_dashboard?.TopTenServicePerTownship.Select(x => x.Count));
@@ -243,6 +296,8 @@
         _error = null;
         _selectedTownshipCode = null;
         _townshipServicesError = null;
+        _selectedUserId = null;
+        _userRequestsError = null;
 
         var dashboardTask = ApiClient.GetDashboardAsync();
         var totalActiveTask = ApiClient.GetAdminAsync<TotalActiveModel>("api/admin/TotalActive");
@@ -256,6 +311,7 @@
             _dashboard = dashboardResult.Data;
             _totalActive = totalActiveResult.Data;
             _townshipServices = new();
+            _userRequests = new();
             return;
         }
 
@@ -284,6 +340,26 @@
         _townshipServicesError = string.IsNullOrWhiteSpace(result.Message) ? "Unable to load township services." : result.Message;
     }
 
+    private async Task LoadUserRequestsAsync(TopTenRequestPerUserModel user)
+    {
+        _selectedUserId = user.UserId;
+        _selectedUserName = TextOrFallback(user.UserName, $"User #{user.UserId}");
+        _userRequests = new();
+        _userRequestsError = null;
+        _isUserRequestsLoading = true;
+
+        var result = await ApiClient.GetAdminAsync<List<UserTopRequestModel>>($"api/admin/UserTopTenRequest/{user.UserId}");
+
+        _isUserRequestsLoading = false;
+        if (result.IsSuccess && result.Data is not null)
+        {
+            _userRequests = result.Data;
+            return;
+        }
+
+        _userRequestsError = string.IsNullOrWhiteSpace(result.Message) ? "Unable to load user requests." : result.Message;
+    }
+
     private static int MaxCount(IEnumerable<int>? values)
     {
         return values?.DefaultIfEmpty(1).Max() ?? 1;
@@ -300,6 +376,16 @@
         return string.IsNullOrWhiteSpace(value) ? fallback : value;
     }
 
+    private static string StatusVariant(string? status)
+    {
+        return string.Equals(status, "Pending", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, "Rejected", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, "Cancel", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, "Deleted", StringComparison.OrdinalIgnoreCase)
+            ? "danger"
+            : "muted";
+    }
+
     private sealed class TotalActiveModel
     {
         public int Users { get; set; }
@@ -314,5 +400,14 @@
         public string ServiceName { get; set; } = string.Empty;
         public string PhoneNumber { get; set; } = string.Empty;
         public int RequestCount { get; set; }
+    }
+
+    private sealed class UserTopRequestModel
+    {
+        public int RequestId { get; set; }
+        public int ServiceId { get; set; }
+        public DateTime RequestTime { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public string? TownshipCode { get; set; }
     }
 }

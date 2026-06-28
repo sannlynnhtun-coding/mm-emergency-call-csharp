@@ -125,6 +125,7 @@
                                                         <div class="flex flex-wrap justify-end gap-2">
                                                             @if (CanCreateLocations)
                                                             {
+                                                                <Button Variant="ghost" OnClick="@(() => LoadLocationDetailAsync(row.Id.Value))" Disabled="@(_actionId.HasValue || _isLocationDetailLoading)">Details</Button>
                                                                 <Button Variant="outline" OnClick="@(() => StartEdit(row))" Disabled="@(_actionId.HasValue || _isSaving)">Edit</Button>
                                                             }
                                                             @if (CanManageServices && row.Service is not null)
@@ -199,6 +200,22 @@
                                 </div>
                             </div>
                         </form>
+                    }
+                    @if (CanCreateLocations && _locationDetail is not null)
+                    {
+                        <div class="rounded-md border border-neutral-200 bg-neutral-50 p-4">
+                            <div class="flex items-center justify-between gap-3">
+                                <p class="text-sm font-medium text-neutral-950">@_locationDetail.NameEn</p>
+                                <Badge Variant="muted">@_locationDetail.Code</Badge>
+                            </div>
+                            <div class="mt-3 grid gap-2 text-sm text-neutral-600">
+                                <p>@TextOrFallback(_locationDetail.NameMm, "No Myanmar name")</p>
+                                @if (!string.IsNullOrWhiteSpace(_locationDetail.ParentCode))
+                                {
+                                    <p>State region / @_locationDetail.ParentCode</p>
+                                }
+                            </div>
+                        </div>
                     }
                     @if (CanCreateUsers)
                     {
@@ -350,6 +367,7 @@
     private string _editNameEn = string.Empty;
     private string _editNameMm = string.Empty;
     private string _editStateRegionCode = string.Empty;
+    private LocationDetail? _locationDetail;
     private string _userName = string.Empty;
     private string _userEmail = string.Empty;
     private string _userPassword = string.Empty;
@@ -374,6 +392,7 @@
     private bool _isEndOfPage = true;
     private bool _isLoading;
     private bool _isSaving;
+    private bool _isLocationDetailLoading;
     private bool _isUserDetailLoading;
     private bool _canGoPrevious => _hasPagination && !_isLoading && _pageNo > 1;
     private bool _canGoNext => _hasPagination && !_isLoading && !_isEndOfPage && _pageNo < _pageCount;
@@ -420,6 +439,7 @@
             _roleFilter = string.Empty;
             ResetCreateForm();
             ResetEditForm();
+            ResetLocationDetail();
             ResetUserForm();
             ResetUserDetail();
             ResetServiceForm();
@@ -704,6 +724,37 @@
         _actionError = string.IsNullOrWhiteSpace(result.Message) ? "Unable to load user details." : result.Message;
     }
 
+    private async Task LoadLocationDetailAsync(int id)
+    {
+        _actionError = null;
+        _actionMessage = null;
+        _isLocationDetailLoading = true;
+
+        if (Path == "/townships")
+        {
+            var result = await ApiClient.GetAdminAsync<TownshipListItem>($"api/Township/{id}");
+            _isLocationDetailLoading = false;
+            if (result.IsSuccess && result.Data is not null)
+            {
+                _locationDetail = new(result.Data.TownshipId, result.Data.TownshipCode, result.Data.TownshipNameEn, result.Data.TownshipNameMm, result.Data.StateRegionCode);
+                return;
+            }
+
+            _actionError = string.IsNullOrWhiteSpace(result.Message) ? "Unable to load township details." : result.Message;
+            return;
+        }
+
+        var stateResult = await ApiClient.GetAdminAsync<StateRegionListItem>($"api/StateRegion/{id}");
+        _isLocationDetailLoading = false;
+        if (stateResult.IsSuccess && stateResult.Data is not null)
+        {
+            _locationDetail = new(stateResult.Data.StateRegionId, stateResult.Data.StateRegionCode, stateResult.Data.StateRegionNameEn, stateResult.Data.StateRegionNameMm, null);
+            return;
+        }
+
+        _actionError = string.IsNullOrWhiteSpace(stateResult.Message) ? "Unable to load state region details." : stateResult.Message;
+    }
+
     private void StartEdit(TableRow row)
     {
         if (!row.Id.HasValue)
@@ -826,6 +877,11 @@
             return;
         }
 
+        if (_locationDetail?.Id == _editId)
+        {
+            ResetLocationDetail();
+        }
+
         ResetEditForm();
         _actionMessage = $"{Current.Title.TrimEnd('s')} updated.";
         await LoadAsync();
@@ -876,6 +932,11 @@
         if (_editId == id)
         {
             ResetEditForm();
+        }
+
+        if (CanCreateLocations && _locationDetail?.Id == id)
+        {
+            ResetLocationDetail();
         }
 
         if (Path == "/users" && (_userEditId == id || _userDetail?.UserId == id))
@@ -1020,6 +1081,11 @@
         _editStateRegionCode = string.Empty;
     }
 
+    private void ResetLocationDetail()
+    {
+        _locationDetail = null;
+    }
+
     private void ResetUserForm()
     {
         _userEditId = null;
@@ -1100,6 +1166,8 @@
     private sealed record FeaturePageInfo(string Group, string Title, string Description, string TableTitle, string TableSubtitle, string EmptyText);
 
     private sealed record TableRow(string Name, string Secondary, string Status, string Detail, string BadgeVariant, int? Id = null, string Code = "", string ParentCode = "", UserRow? User = null, ServiceRow? Service = null);
+
+    private sealed record LocationDetail(int Id, string Code, string NameEn, string? NameMm, string? ParentCode);
 
     private sealed record RequestStatusUpdate(string Status);
 

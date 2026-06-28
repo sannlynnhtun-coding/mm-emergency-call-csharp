@@ -98,14 +98,18 @@
                                                     <Button Variant="outline" OnClick='@(() => UpdateServiceStatusAsync(row.Id.Value, "Rejected"))' Disabled="@_actionId.HasValue">Reject</Button>
                                                 </div>
                                             }
-                                            else if (CanUpdateRequests && row.Id.HasValue && !IsFinalRequestStatus(row.Status))
+                                            else if (CanUpdateRequests && row.Id.HasValue && row.Request is not null)
                                             {
                                                 <div class="grid justify-items-end gap-2">
                                                     <span>@row.Detail</span>
                                                     <div class="flex flex-wrap justify-end gap-2">
-                                                        <Button OnClick='@(() => UpdateRequestStatusAsync(row.Id.Value, "Completed"))' Disabled="@_actionId.HasValue">Complete</Button>
-                                                        <Button Variant="outline" OnClick='@(() => UpdateRequestStatusAsync(row.Id.Value, "Closed"))' Disabled="@_actionId.HasValue">Close</Button>
-                                                        <Button Variant="danger" OnClick='@(() => UpdateRequestStatusAsync(row.Id.Value, "Cancel"))' Disabled="@_actionId.HasValue">Cancel</Button>
+                                                        <Button Variant="ghost" OnClick="@(() => LoadRequestDetail(row))" Disabled="@_actionId.HasValue">Details</Button>
+                                                        @if (!IsFinalRequestStatus(row.Status))
+                                                        {
+                                                            <Button OnClick='@(() => UpdateRequestStatusAsync(row.Id.Value, "Completed"))' Disabled="@_actionId.HasValue">Complete</Button>
+                                                            <Button Variant="outline" OnClick='@(() => UpdateRequestStatusAsync(row.Id.Value, "Closed"))' Disabled="@_actionId.HasValue">Close</Button>
+                                                            <Button Variant="danger" OnClick='@(() => UpdateRequestStatusAsync(row.Id.Value, "Cancel"))' Disabled="@_actionId.HasValue">Cancel</Button>
+                                                        }
                                                     </div>
                                                 </div>
                                             }
@@ -174,6 +178,28 @@
             <Card Class="p-5">
                 <h2 class="text-lg font-semibold text-neutral-950">Workspace</h2>
                 <div class="mt-5 grid gap-3">
+                    @if (CanUpdateRequests && _requestDetail is not null)
+                    {
+                        <div class="rounded-md border border-neutral-200 bg-neutral-50 p-4">
+                            <div class="flex items-center justify-between gap-3">
+                                <p class="text-sm font-medium text-neutral-950">Request #@_requestDetail.RequestId</p>
+                                <Badge Variant="@StatusVariant(_requestDetail.Status)">@_requestDetail.Status</Badge>
+                            </div>
+                            <div class="mt-3 grid gap-2 text-sm text-neutral-600">
+                                <p>User @_requestDetail.Request.UserId / Service @_requestDetail.Request.ServiceId</p>
+                                <p>Provider @TextOrFallback(_requestDetail.Request.ProviderId?.ToString(), "Unassigned") / @TextOrFallback(_requestDetail.Request.TownshipCode, "No township")</p>
+                                <p>Requested @_requestDetail.Request.RequestTime.ToLocalTime().ToString("g")</p>
+                                @if (_requestDetail.Request.ResponseTime.HasValue)
+                                {
+                                    <p>Responded @_requestDetail.Request.ResponseTime.Value.ToLocalTime().ToString("g")</p>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(_requestDetail.Request.Notes))
+                                {
+                                    <p>@_requestDetail.Request.Notes</p>
+                                }
+                            </div>
+                        </div>
+                    }
                     @if (CanCreateLocations)
                     {
                         <form class="rounded-md border border-neutral-200 bg-neutral-50 p-4" @onsubmit="CreateLocationAsync" @onsubmit:preventDefault="true">
@@ -364,6 +390,7 @@
     private string? _error;
     private string? _actionError;
     private string? _actionMessage;
+    private RequestDetail? _requestDetail;
     private string _statusFilter = string.Empty;
     private string _roleFilter = string.Empty;
     private string _createCode = string.Empty;
@@ -445,6 +472,7 @@
             _pageNo = 1;
             _statusFilter = string.Empty;
             _roleFilter = string.Empty;
+            ResetRequestDetail();
             ResetCreateForm();
             ResetEditForm();
             ResetLocationDetail();
@@ -469,7 +497,7 @@
             case "/emergency-requests":
                 await LoadPagedAsync<EmergencyRequestListItem>(
                     WithQuery($"api/admin/EmergencyRequestList/pageNo/{_pageNo}/pageSize/{PageSize}", ("status", _statusFilter)),
-                    x => new TableRow($"Request #{x.RequestId}", $"User {x.UserId} / Service {x.ServiceId}", x.Status, x.RequestTime.ToLocalTime().ToString("g"), StatusVariant(x.Status), x.RequestId));
+                    x => new TableRow($"Request #{x.RequestId}", $"User {x.UserId} / Service {x.ServiceId}", x.Status, x.RequestTime.ToLocalTime().ToString("g"), StatusVariant(x.Status), x.RequestId, Request: new RequestRow(x.UserId, x.ServiceId, x.ProviderId, x.RequestTime, x.ResponseTime, x.Notes, x.TownshipCode)));
                 break;
             case "/emergency-services":
                 await LoadPagedAsync<EmergencyServiceListItem>(
@@ -516,9 +544,18 @@
         _userRole = args.Value?.ToString() ?? "Normal User";
     }
 
+    private void LoadRequestDetail(TableRow row)
+    {
+        if (row.Id.HasValue && row.Request is not null)
+        {
+            _requestDetail = new(row.Id.Value, row.Status, row.Request);
+        }
+    }
+
     private async Task ApplyFiltersAsync()
     {
         _pageNo = 1;
+        ResetRequestDetail();
         await LoadAsync();
     }
 
@@ -1005,6 +1042,12 @@
             return;
         }
 
+        if (_requestDetail?.RequestId == requestId)
+        {
+            _requestDetail = _requestDetail with { Status = status };
+        }
+
+        _actionMessage = $"Request {status.ToLowerInvariant()}.";
         await LoadAsync();
     }
 
@@ -1079,6 +1122,11 @@
         _createNameEn = string.Empty;
         _createNameMm = string.Empty;
         _createStateRegionCode = string.Empty;
+    }
+
+    private void ResetRequestDetail()
+    {
+        _requestDetail = null;
     }
 
     private void ResetEditForm()
@@ -1184,7 +1232,11 @@
 
     private sealed record FeaturePageInfo(string Group, string Title, string Description, string TableTitle, string TableSubtitle, string EmptyText);
 
-    private sealed record TableRow(string Name, string Secondary, string Status, string Detail, string BadgeVariant, int? Id = null, string Code = "", string ParentCode = "", UserRow? User = null, ServiceRow? Service = null);
+    private sealed record TableRow(string Name, string Secondary, string Status, string Detail, string BadgeVariant, int? Id = null, string Code = "", string ParentCode = "", RequestRow? Request = null, UserRow? User = null, ServiceRow? Service = null);
+
+    private sealed record RequestRow(int UserId, int ServiceId, int? ProviderId, DateTime RequestTime, DateTime? ResponseTime, string? Notes, string? TownshipCode);
+
+    private sealed record RequestDetail(int RequestId, string Status, RequestRow Request);
 
     private sealed record LocationDetail(int Id, string Code, string NameEn, string? NameMm, string? ParentCode);
 

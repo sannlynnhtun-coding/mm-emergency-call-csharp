@@ -73,6 +73,17 @@ public sealed class ApiClient
         }
     }
 
+    public async Task<ApiResult<RefreshTokenResponse>> RefreshSessionAsync(CancellationToken cancellationToken = default)
+    {
+        var result = await PostAdminAsJsonAsync<RefreshTokenResponse>("api/Admin/RefreshToken", new { }, cancellationToken);
+        if (result.IsSuccess && !string.IsNullOrWhiteSpace(result.Data?.Token))
+        {
+            _authState.RefreshToken(result.Data.Token);
+        }
+
+        return result;
+    }
+
     public async Task<ApiResult<T>> GetAdminAsync<T>(string path, CancellationToken cancellationToken = default)
     {
         return await SendAdminAsync<T>(HttpMethod.Get, path, null, cancellationToken);

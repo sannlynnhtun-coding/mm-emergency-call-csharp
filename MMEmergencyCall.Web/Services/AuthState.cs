@@ -13,6 +13,14 @@ public sealed class AuthState
         User = user;
     }
 
+    public void RefreshToken(string token)
+    {
+        if (User is not null)
+        {
+            User.Token = token;
+        }
+    }
+
     public void SignOut()
     {
         User = null;

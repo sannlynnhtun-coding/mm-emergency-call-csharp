@@ -27,7 +27,7 @@ public class RefreshTokenService
 			_db.Entry(session).State = EntityState.Modified;
 			await _db.SaveChangesAsync();
 
-			RefreshTokenModel ResponseTokenModel = new()
+			RefreshTokenModel responseTokenModel = new()
 			{
 				UserId = requestTokenModel.UserId,
 				SessionId = requestTokenModel.SessionId,
@@ -37,8 +37,7 @@ public class RefreshTokenService
 				Role = requestTokenModel.Role,
 			};
 
-			var newToken = requestTokenModel.ToJson().ToEncrypt();
-			requestTokenModel.Token = newToken;
+			var newToken = responseTokenModel.ToJson().ToEncrypt();
 
 			RefreshTokenResponseModel responseModel = new()
 			{

@@ -16,3 +16,8 @@ public sealed class AdminSignInModel
     public string Role { get; set; } = string.Empty;
     public string Token { get; set; } = string.Empty;
 }
+
+public sealed class RefreshTokenResponse
+{
+    public string Token { get; set; } = string.Empty;
+}

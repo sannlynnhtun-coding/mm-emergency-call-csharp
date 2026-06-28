@@ -43,7 +43,16 @@
                     <div class="mt-3 rounded-md border border-white/10 bg-white/5 p-3">
                         <p class="truncate text-sm font-medium text-white">@AuthState.User?.Name</p>
                         <p class="mt-1 truncate text-xs text-neutral-400">@AuthState.User?.Email</p>
-                        <div class="mt-3">
+                        @if (!string.IsNullOrWhiteSpace(_accountError))
+                        {
+                            <p class="mt-2 text-xs text-red-400">@_accountError</p>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(_accountMessage))
+                        {
+                            <p class="mt-2 text-xs text-neutral-300">@_accountMessage</p>
+                        }
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            <Button Variant="outline" OnClick="RefreshSession" Disabled="@_isRefreshingSession">Refresh session</Button>
                             <Button Variant="outline" OnClick="SignOut">Sign out</Button>
                         </div>
                     </div>
@@ -98,6 +107,28 @@ else
             new("State Regions", "/state-regions")
         ])
     ];
+
+    private string? _accountError;
+    private string? _accountMessage;
+    private bool _isRefreshingSession;
+
+    private async Task RefreshSession()
+    {
+        _accountError = null;
+        _accountMessage = null;
+        _isRefreshingSession = true;
+
+        var result = await ApiClient.RefreshSessionAsync();
+
+        _isRefreshingSession = false;
+        if (result.IsSuccess && !string.IsNullOrWhiteSpace(result.Data?.Token))
+        {
+            _accountMessage = "Session refreshed.";
+            return;
+        }
+
+        _accountError = string.IsNullOrWhiteSpace(result.Message) ? "Unable to refresh session." : result.Message;
+    }
 
     private async Task SignOut()
     {

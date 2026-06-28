@@ -58,8 +58,9 @@ public class AdminAuthServiceTests
         await db.SaveAsync(Seed.Session(sessionId));
         var service = new RefreshTokenService(Logger.For<RefreshTokenService>(), db.Db);
 
-        var success = await service.RefreshToken(AdminRefreshToken(sessionId));
-        Assert.False(string.IsNullOrWhiteSpace(ResultAssert.Success(success).Token));
+        var success = await service.RefreshToken(AdminRefreshToken(sessionId, DateTime.Now.AddMinutes(-1)));
+        var refreshed = ResultAssert.Success(success).Token.ToDecrypt().ToObject<RefreshTokenModel>();
+        Assert.True(refreshed.SessionExpiredTime > DateTime.Now);
 
         var failure = await service.RefreshToken("bad-token");
         ResultAssert.SystemError(failure);
@@ -94,7 +95,7 @@ public class AdminAuthServiceTests
         EmergencyDetails = "Details"
     };
 
-    private static string AdminRefreshToken(Guid sessionId)
+    private static string AdminRefreshToken(Guid sessionId, DateTime? sessionExpiredTime = null)
     {
         return new RefreshTokenModel
         {
@@ -103,7 +104,7 @@ public class AdminAuthServiceTests
             Name = "Admin",
             Email = "admin@gmail.com",
             Role = "admin",
-            SessionExpiredTime = DateTime.Now.AddMinutes(5)
+            SessionExpiredTime = sessionExpiredTime ?? DateTime.Now.AddMinutes(5)
         }.ToJson().ToEncrypt();
     }
 

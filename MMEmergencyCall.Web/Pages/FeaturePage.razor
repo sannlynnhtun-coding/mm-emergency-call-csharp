@@ -94,6 +94,10 @@
                                             @if (CanApproveServices && row.Id.HasValue)
                                             {
                                                 <div class="flex flex-wrap justify-end gap-2">
+                                                    @if (row.Service is not null)
+                                                    {
+                                                        <Button Variant="ghost" OnClick="@(() => LoadServiceDetail(row))" Disabled="@_actionId.HasValue">Details</Button>
+                                                    }
                                                     <Button OnClick='@(() => UpdateServiceStatusAsync(row.Id.Value, "Approved"))' Disabled="@_actionId.HasValue">Approve</Button>
                                                     <Button Variant="outline" OnClick='@(() => UpdateServiceStatusAsync(row.Id.Value, "Rejected"))' Disabled="@_actionId.HasValue">Reject</Button>
                                                 </div>
@@ -134,6 +138,7 @@
                                                             }
                                                             @if (CanManageServices && row.Service is not null)
                                                             {
+                                                                <Button Variant="ghost" OnClick="@(() => LoadServiceDetail(row))" Disabled="@_actionId.HasValue">Details</Button>
                                                                 <Button Variant="outline" OnClick="@(() => StartServiceEdit(row))" Disabled="@(_actionId.HasValue || _isSaving)">Edit</Button>
                                                                 @if (!IsApproved(row.Status))
                                                                 {
@@ -303,6 +308,22 @@
                             </div>
                         </div>
                     }
+                    @if ((CanManageServices || CanApproveServices) && _serviceDetail is not null)
+                    {
+                        <div class="rounded-md border border-neutral-200 bg-neutral-50 p-4">
+                            <div class="flex items-center justify-between gap-3">
+                                <p class="text-sm font-medium text-neutral-950">@_serviceDetail.Service.ServiceName</p>
+                                <Badge Variant="@StatusVariant(_serviceDetail.Status)">@_serviceDetail.Status</Badge>
+                            </div>
+                            <div class="mt-3 grid gap-2 text-sm text-neutral-600">
+                                <p>@_serviceDetail.Service.ServiceGroup / @_serviceDetail.Service.ServiceType</p>
+                                <p>@_serviceDetail.Service.PhoneNumber</p>
+                                <p>@TextOrFallback(_serviceDetail.Service.Location, "No location")</p>
+                                <p>Availability @TextOrFallback(_serviceDetail.Service.Availability, "Unknown") / @TextOrFallback(_serviceDetail.Service.TownshipCode, "No township")</p>
+                                <p>Provider user @_serviceDetail.Service.UserId</p>
+                            </div>
+                        </div>
+                    }
                     @if (CanManageServices)
                     {
                         <form class="rounded-md border border-neutral-200 bg-neutral-50 p-4" @onsubmit="SaveServiceAsync" @onsubmit:preventDefault="true">
@@ -421,6 +442,7 @@
     private string _serviceAvailability = string.Empty;
     private string _serviceTownshipCode = string.Empty;
     private int? _serviceEditId;
+    private ServiceDetail? _serviceDetail;
     private string? _confirmActionKey;
     private int? _actionId;
     private bool _hasPagination;
@@ -479,6 +501,7 @@
             ResetUserForm();
             ResetUserDetail();
             ResetServiceForm();
+            ResetServiceDetail();
             await LoadAsync();
         }
     }
@@ -502,12 +525,12 @@
             case "/emergency-services":
                 await LoadPagedAsync<EmergencyServiceListItem>(
                     WithQuery($"api/Admin/EmergencyService/pageNo/{_pageNo}/pageSize/{PageSize}", ("serviceStatus", _statusFilter)),
-                    x => new TableRow(TextOrFallback(x.ServiceName, $"Service #{x.ServiceId}"), $"{x.ServiceType} / {x.PhoneNumber}", TextOrFallback(x.ServiceStatus, "Unknown"), TextOrFallback(x.TownshipCode, "No township"), StatusVariant(x.ServiceStatus), x.ServiceId, Service: new ServiceRow(x.ServiceGroup, x.ServiceType, x.ServiceName, x.PhoneNumber, x.Location, x.Availability, x.TownshipCode)));
+                    x => new TableRow(TextOrFallback(x.ServiceName, $"Service #{x.ServiceId}"), $"{x.ServiceType} / {x.PhoneNumber}", TextOrFallback(x.ServiceStatus, "Unknown"), TextOrFallback(x.TownshipCode, "No township"), StatusVariant(x.ServiceStatus), x.ServiceId, Service: new ServiceRow(x.UserId, x.ServiceGroup, x.ServiceType, x.ServiceName, x.PhoneNumber, x.Location, x.Availability, x.TownshipCode)));
                 break;
             case "/service-approvals":
                 await LoadPagedAsync<EmergencyServiceListItem>(
                     $"api/Admin/EmergencyService/pageNo/{_pageNo}/pageSize/{PageSize}?serviceStatus=Pending",
-                    x => new TableRow(TextOrFallback(x.ServiceName, $"Service #{x.ServiceId}"), $"{x.ServiceType} / {x.PhoneNumber}", TextOrFallback(x.ServiceStatus, "Pending"), TextOrFallback(x.TownshipCode, "No township"), StatusVariant(x.ServiceStatus), x.ServiceId));
+                    x => new TableRow(TextOrFallback(x.ServiceName, $"Service #{x.ServiceId}"), $"{x.ServiceType} / {x.PhoneNumber}", TextOrFallback(x.ServiceStatus, "Pending"), TextOrFallback(x.TownshipCode, "No township"), StatusVariant(x.ServiceStatus), x.ServiceId, Service: new ServiceRow(x.UserId, x.ServiceGroup, x.ServiceType, x.ServiceName, x.PhoneNumber, x.Location, x.Availability, x.TownshipCode)));
                 break;
             case "/users":
                 await LoadPagedAsync<UserListItem>(
@@ -552,10 +575,19 @@
         }
     }
 
+    private void LoadServiceDetail(TableRow row)
+    {
+        if (row.Id.HasValue && row.Service is not null)
+        {
+            _serviceDetail = new(row.Id.Value, row.Status, row.Service);
+        }
+    }
+
     private async Task ApplyFiltersAsync()
     {
         _pageNo = 1;
         ResetRequestDetail();
+        ResetServiceDetail();
         await LoadAsync();
     }
 
@@ -698,6 +730,11 @@
         if (!isEdit)
         {
             _pageNo = 1;
+        }
+
+        if (_serviceDetail?.ServiceId == serviceEditId)
+        {
+            ResetServiceDetail();
         }
 
         ResetServiceForm();
@@ -995,6 +1032,11 @@
             ResetServiceForm();
         }
 
+        if ((CanManageServices || CanApproveServices) && _serviceDetail?.ServiceId == id)
+        {
+            ResetServiceDetail();
+        }
+
         await LoadAsync();
     }
 
@@ -1018,6 +1060,11 @@
         if (_rows.Count == 1 && _pageNo > 1)
         {
             _pageNo--;
+        }
+
+        if (_serviceDetail?.ServiceId == serviceId)
+        {
+            _serviceDetail = _serviceDetail with { Status = serviceStatus };
         }
 
         _actionMessage = $"Emergency service {serviceStatus.ToLowerInvariant()}.";
@@ -1173,6 +1220,11 @@
         _serviceTownshipCode = string.Empty;
     }
 
+    private void ResetServiceDetail()
+    {
+        _serviceDetail = null;
+    }
+
     private static string StatusVariant(string? status)
     {
         return string.Equals(status, "Pending", StringComparison.OrdinalIgnoreCase) ||
@@ -1250,7 +1302,9 @@
 
     private sealed record UserUpdateRequest(string Name, string Email, string PhoneNumber, string Address, string? EmergencyType, string? EmergencyDetails, string TownshipCode, string Role, string UserStatus);
 
-    private sealed record ServiceRow(string ServiceGroup, string ServiceType, string ServiceName, string PhoneNumber, string? Location, string? Availability, string? TownshipCode);
+    private sealed record ServiceRow(int UserId, string ServiceGroup, string ServiceType, string ServiceName, string PhoneNumber, string? Location, string? Availability, string? TownshipCode);
+
+    private sealed record ServiceDetail(int ServiceId, string Status, ServiceRow Service);
 
     private sealed record EmergencyServiceRequest(string ServiceGroup, string ServiceType, string ServiceName, string PhoneNumber, string? Location, string? Availability, string? TownshipCode);
 

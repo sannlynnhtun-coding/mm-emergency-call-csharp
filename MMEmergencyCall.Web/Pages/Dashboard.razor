@@ -79,7 +79,8 @@
                                     </div>
                                     <div class="flex items-center gap-2">
                                         <span class="text-sm font-semibold text-red-700">@row.Count</span>
-                                        <Button Variant="ghost" OnClick="@(() => LoadTownshipServicesAsync(row))" Disabled="@_isTownshipServicesLoading">View</Button>
+                                        <Button Variant="ghost" OnClick="@(() => LoadTownshipServicesAsync(row))" Disabled="@_isTownshipServicesLoading">Services</Button>
+                                        <Button Variant="ghost" OnClick="@(() => LoadTownshipRequestsAsync(row))" Disabled="@_isTownshipRequestsLoading">Requests</Button>
                                     </div>
                                 </div>
                                 <div class="mt-3 h-2 rounded-full bg-neutral-100">
@@ -124,6 +125,51 @@
                                                 <p class="truncate text-xs text-neutral-500">@TextOrFallback(service.ServiceType, "Unknown") / @TextOrFallback(service.PhoneNumber, "No phone")</p>
                                             </div>
                                             <span class="font-semibold text-red-700">@service.RequestCount</span>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(_townshipRequestsError))
+                {
+                    <div class="mt-5">
+                        <Alert Variant="danger">@_townshipRequestsError</Alert>
+                    </div>
+                }
+                else if (!string.IsNullOrWhiteSpace(_selectedTownshipRequestCode))
+                {
+                    <div class="mt-5 rounded-md border border-neutral-200 bg-neutral-50 p-4">
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <h3 class="text-sm font-semibold text-neutral-950">@_selectedTownshipRequestName</h3>
+                                <p class="mt-1 text-xs text-neutral-500">Latest requests in this township.</p>
+                            </div>
+                            <Badge Variant="muted">@(_isTownshipRequestsLoading ? "Loading" : $"{_townshipRequests.Count} rows")</Badge>
+                        </div>
+
+                        @if (!_isTownshipRequestsLoading)
+                        {
+                            <div class="mt-4 space-y-2">
+                                @if (_townshipRequests.Count == 0)
+                                {
+                                    <p class="text-sm text-neutral-600">No township request data.</p>
+                                }
+                                else
+                                {
+                                    @foreach (var request in _townshipRequests)
+                                    {
+                                        <div class="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-sm">
+                                            <div class="min-w-0">
+                                                <p class="truncate font-medium text-neutral-950">Request #@request.RequestId</p>
+                                                <p class="truncate text-xs text-neutral-500">User @request.UserId / Service @request.ServiceId</p>
+                                            </div>
+                                            <div class="text-right">
+                                                <Badge Variant="@StatusVariant(request.Status)">@TextOrFallback(request.Status, "Unknown")</Badge>
+                                                <p class="mt-1 text-xs text-neutral-500">@request.RequestTime.ToLocalTime().ToString("g")</p>
+                                            </div>
                                         </div>
                                     }
                                 }
@@ -268,12 +314,17 @@
     private string? _selectedTownshipCode;
     private string? _selectedTownshipName;
     private string? _townshipServicesError;
+    private List<TownshipTopRequestModel> _townshipRequests = new();
+    private string? _selectedTownshipRequestCode;
+    private string? _selectedTownshipRequestName;
+    private string? _townshipRequestsError;
     private List<UserTopRequestModel> _userRequests = new();
     private int? _selectedUserId;
     private string? _selectedUserName;
     private string? _userRequestsError;
     private bool _isLoading;
     private bool _isTownshipServicesLoading;
+    private bool _isTownshipRequestsLoading;
     private bool _isUserRequestsLoading;
     private string? _error;
 
@@ -296,6 +347,8 @@
         _error = null;
         _selectedTownshipCode = null;
         _townshipServicesError = null;
+        _selectedTownshipRequestCode = null;
+        _townshipRequestsError = null;
         _selectedUserId = null;
         _userRequestsError = null;
 
@@ -311,6 +364,7 @@
             _dashboard = dashboardResult.Data;
             _totalActive = totalActiveResult.Data;
             _townshipServices = new();
+            _townshipRequests = new();
             _userRequests = new();
             return;
         }
@@ -338,6 +392,26 @@
         }
 
         _townshipServicesError = string.IsNullOrWhiteSpace(result.Message) ? "Unable to load township services." : result.Message;
+    }
+
+    private async Task LoadTownshipRequestsAsync(TopTenServicePerTownshipModel township)
+    {
+        _selectedTownshipRequestCode = township.TownshipCode;
+        _selectedTownshipRequestName = TextOrFallback(township.TownshipNameEn, township.TownshipCode);
+        _townshipRequests = new();
+        _townshipRequestsError = null;
+        _isTownshipRequestsLoading = true;
+
+        var result = await ApiClient.GetAdminAsync<List<TownshipTopRequestModel>>($"api/admin/TownshipTopTenRequest/{Uri.EscapeDataString(township.TownshipCode)}");
+
+        _isTownshipRequestsLoading = false;
+        if (result.IsSuccess && result.Data is not null)
+        {
+            _townshipRequests = result.Data;
+            return;
+        }
+
+        _townshipRequestsError = string.IsNullOrWhiteSpace(result.Message) ? "Unable to load township requests." : result.Message;
     }
 
     private async Task LoadUserRequestsAsync(TopTenRequestPerUserModel user)
@@ -400,6 +474,15 @@
         public string ServiceName { get; set; } = string.Empty;
         public string PhoneNumber { get; set; } = string.Empty;
         public int RequestCount { get; set; }
+    }
+
+    private sealed class TownshipTopRequestModel
+    {
+        public int RequestId { get; set; }
+        public int UserId { get; set; }
+        public int ServiceId { get; set; }
+        public DateTime RequestTime { get; set; }
+        public string Status { get; set; } = string.Empty;
     }
 
     private sealed class UserTopRequestModel
